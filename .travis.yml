@@ -7,13 +7,13 @@ addons:
     - p7zip-full
 sudo: false
 go:
-- "1.10"
+- '1.10'
 git:
   depth: 500
 install:
 - go get github.com/kardianos/govendor
-- ./tools/build.sh
-- ./tools/package.sh
+- "./tools/build.sh"
+- "./tools/package.sh"
 script:
 - make test
 - make testacc
@@ -23,7 +23,7 @@ deploy:
 - provider: releases
   overwrite: true
   api_key:
-    secure: ${GITHUB_TOKEN}
+    secure: "${GITHUB_TOKEN}"
   file:
   - bin/darwin/amd64/terraform-provider-drp_${TRAVIS_TAG}_darwin_amd64.zip
   - bin/linux/amd64/terraform-provider-drp_${TRAVIS_TAG}_linux_amd64.zip
@@ -32,3 +32,6 @@ deploy:
   on:
     repo: form3tech-oss/terraform-provider-drp
     tags: true
+env:
+  global:
+    secure: kWANtpnEXnP8G96Y9oHTwR2vc3wayn8F92ToqdK/wa7VvE7T04CXn5L32EK1Xb9qsdqPIf51CgofMhiyLugJAYbgmaSO+YOhkE88VOOn/yJSU/S8pGLbotFLBIVESog2l78ViXRSOloJILSp2oxdsCWHx7Vr0CzejMO/eTAfJJ9NTyRF/GutaS5Jbc1V53AgHh1GzXP/1vDCgFyyESK+Xv0GAO6MGgxfgvkqRr6vt3oTi43wDWAV2lvVynQ5eXSqYyHJ0Kt10ppqVAOGlgyL3ZxkgAmZTR4s3w5Dbk57GNyzN7Hfp0tVzgTWTQhLO9mRZL38YJOS6FFLbQWZvabhc6Hkkge64QKlgAYiUYWgLKrpfXr7UB4+WAtmTNJlhytXLKjqsUeWfwE5M+BYGA9/4Cc/hxDatOlOjG+2SN4JqMm62P7i+SfDDAZQUDY7sPrP/G9vWAhAUNBEH0MVRetPTyxmizuXYzS1kUZ+JavlxMuX2puzES5Fh4lSHhM4eFQAK5nkqydB7Gygps12SgI2AKqroUyqadTgD/z+RLyufFZr6bVyvpHIjXXymLSsFbbsgT+casLxJXV7I1PzVRS+sKl0D2JYHQrWjgrUcmEh4gZsX1TSQOo6t9MF9qP/aN/cI2e9yTBWc7hDzkZQhvzuOg05LNKIFOOqHHWQtth4iiI=
