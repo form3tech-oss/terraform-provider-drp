@@ -5,9 +5,9 @@ set -e
 [[ $GOPATH ]] || export GOPATH="$HOME/go"
 fgrep -q "$GOPATH/bin" <<< "$PATH" || export PATH="$PATH:$GOPATH/bin"
 
-[[ -d "$GOPATH/src/github.com/rackn/terraform-provider-drp" ]] || go get github.com/rackn/terraform-provider-drp
+[[ -d "$GOPATH/src/github.com/form3tech-oss/terraform-provider-drp" ]] || go get github.com/form3tech-oss/terraform-provider-drp
 
-cd "$GOPATH/src/github.com/rackn/terraform-provider-drp"
+cd "$GOPATH/src/github.com/form3tech-oss/terraform-provider-drp"
 if ! which go &>/dev/null; then
         echo "Must have go installed"
         exit 255
