@@ -18,7 +18,7 @@ deploy:
 - provider: releases
   overwrite: true
   api_key:
-    secure: "$GITHUB_TOKEN"
+    secure: "EwbEmaT5jr6FrMfziGOnUMeu8mPzlnlXfmWnZ97DK5MHXazrFXc1SGmxjBVFm+SZiHOhOUfot46ClPgducvCfZcCfpKML8yYcmgyFv2wsHqC1S6YOYGeKD5WpPc9IeNwuG+oARZzZ9KlwAENMXCPWbkUF9HhZpgaqdQR+WgHxMd2ZAUe+FA1I/uVbTTBF8v4g0uO71c4XXEwj5sREZRpnD242YLTh5LGMe/a9oeVKU0fzIwencvlI7YHnooDlM1zQLGPmM6Itj8qQUwXS2rEQd8ZH5Z5tv5ITcLwFUZLDK+emb8GQ2vrFJLGnbId7tpaG1oqLyDcIpf12J3n219g2GsQwRDbK5x9XUD278+j4Q4jQ2WJV5ImsL0vWAkpvFHxQsFrJF0wH+GeVHN2AUYVk8MUjlDMPL8EaDBh/hrIwkZd7qHQPRWZB/maQMcBcHNdxumskMviiJRGtDxq1GGfC+qOgdSHVRdH21jyXSWcLUEh0Sj4V8uwVk8zUItR1SsdY3Bi42IOqoFIAXyAxljZP7sr6H73/IO9uY08nw0SMU5dxdsXU4i2tzSZqadKWCLCAbV0IzujIjPnq+O11xwTm6eD+l/4Y1pSjzyZFjFShEgRxxksqZUdbI5LBWVh1F3Yd4Es5Rw4GcwWu29tJhhvecVWHpFWCa1xQHMa4HcowKA="
   file:
   - bin/darwin/amd64/terraform-provider-drp_${TRAVIS_TAG}_darwin_amd64.zip
   - bin/linux/amd64/terraform-provider-drp_${TRAVIS_TAG}_linux_amd64.zip
@@ -26,6 +26,3 @@ deploy:
   on:
     repo: form3tech-oss/terraform-provider-drp
     tags: true
-env:
-  global:
-    secure: Kpdzou5drOIn75TW1c7wg5lu4vPEReAf3jaLZYKDUESXkFo916wL9qnKrQUtZ75iq27UZB1TKpsN0x8o0JtLwvPZBJylsFkwS5SyUv/EKYRDCh8ODDOGeBqJ+RHJjN5Tl4oNR17ylSD2zuYlKGi1fOtcBa1iC6SdbqhVHYhTqVTqrc0u0GkH6V5H0upsTmKfYg6LcoU5zQZ/R24HRLbGZ2oUyjPfH2UIZoji7hGedKr2qrMpSFrPEz+IjFd/7HbZm/nUro/h1N1p0U0usdIK6jAuRjnw7cEqwyAuc6PFdER2dnCq6krtI1AIZ6ird/1ZARMNqR0u0qls709/St5YjfkHrMwd40jN0Tw/dZanPCJWOi1ZPYJMKLVa4P9QUq02hUJXBCCyDE7vNWODNhHzR22edjkdFqrKXjG/S3ivcHYC3+V7kiT6kQf8rjgtmhgm4WpcqKbuUuJCXzHgoDG5QthzLUE+JVjJ80Y+q9CRMIoVz9mhFRhBvl/UsyupiCGPdHpEVCDTpDZpvpEtQl3SU9A+DcnN9mYLv/sn9HeBc09oRPW4fMSVHfvGCTQWxtvCRPgew3gJ9Av4VBTIgY7D+vg63y68MPBmq+bbR6nYMWDqS1K6PTpKFyzjnyZN+QPyQ8FfGvYCzxIWxZpgUm+vKD5kWHqxeDDkTbERGack8oQ=
