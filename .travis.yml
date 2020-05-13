@@ -11,15 +11,9 @@ go:
 - "1.10"
 git:
   depth: 500
-install:
-- go get github.com/kardianos/govendor
-- ./tools/build.sh
-- ./tools/package.sh
 script:
-- make test
-- make testacc
-- make vendor-status
-- make vet
+- make build
+- ./tools/package.sh
 deploy:
 - provider: releases
   overwrite: true
