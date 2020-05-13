@@ -62,7 +62,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/digitalrebar/provision
-  version: 352f8e29e5c2d03c14bd770d7e27a8568e515489
+  version: 9877ad838300b45ce18a346b384a3bbeaa03a948
   subpackages:
   - api
   - backend
