@@ -8,7 +8,7 @@ addons:
     - p7zip-full
 sudo: false
 go:
-- '1.13'
+- "1.13"
 git:
   depth: 500
 install:
