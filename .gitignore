@@ -1,5 +1,11 @@
 vendor
 bin
-terraform-provider-drp.zip
-terraform-provider-drp.sha256
 .terraform
+terraform.tfstate
+terraform.tfstate.backup
+main.tf
+crash.log
+rebar-catalog
+terraform-provider-drp.sha256
+terraform-provider-drp.zip
+.DS_Store
