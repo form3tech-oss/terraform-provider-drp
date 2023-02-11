@@ -3,7 +3,6 @@ module gitlab.com/rackn/terraform-provider-drpv4
 go 1.13
 
 require (
-	github.com/Bowery/prompt v0.0.0-20190916142128-fa8279994f75 // indirect
 	github.com/VictorLowther/jsonpatch2 v1.0.0
 	github.com/go-test/deep v1.0.3
 	github.com/hashicorp/terraform v0.13.2
