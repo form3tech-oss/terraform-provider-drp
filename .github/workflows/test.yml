@@ -1,0 +1,30 @@
+name: Test
+on:
+  push:
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Setup DRP
+        run: |
+          curl -fsSL get.rebar.digital/stable | bash -s -- install --isolated --version=stable
+          ./dr-provision --version
+          mv -v dr-provision /usr/local/bin
+          mv -v drpcli /usr/local/bin
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '0.13.*'
+          terraform_wrapper: false
+      - name: Run tests
+        env:
+          TF_ACC: 1
+        run: |
+          go test -v ./drpv4 -cover -timeout 30m -count 1
