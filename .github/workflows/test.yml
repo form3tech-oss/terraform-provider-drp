@@ -16,7 +16,8 @@ jobs:
       - name: Setup DRP
         run: |
           curl -fsSL get.rebar.digital/stable | bash -s -- install --isolated --version=stable
-          ./dr-provision --version
+          ln -s $(pwd)/bin/linux/amd64/dr-provision /usr/local/bin/dr-provision
+          dr-provision --version
       - uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: '0.13.*'
@@ -24,10 +25,7 @@ jobs:
       - name: Run tests
         env:
           TF_ACC: 1
-          RS_ENDPOINT: https://127.0.0.1:8092
+          LOG_LEVEL: debug
           RS_KEY: rocketskates:r0cketsk8ts
         run: |
-          mv -v bin/linux/amd64/dr-provision /usr/local/bin/dr-provision
-          ls -lha /usr/local/bin/dr-provision
-          dr-provision --version
           go test -v ./drpv4 -cover -timeout 30m -count 1
