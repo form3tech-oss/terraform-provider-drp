@@ -17,7 +17,7 @@ func init() {
 		"drp": testAccProvider,
 	}
 
-	err := test.StartServer(os.TempDir(), 8091)
+	err := test.StartServer(os.TempDir(), 8092)
 	if err != nil {
 		panic(err)
 	}
