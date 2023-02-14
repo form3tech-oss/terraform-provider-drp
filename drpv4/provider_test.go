@@ -1,8 +1,10 @@
 package drpv4
 
 import (
+	"log"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/test"
@@ -17,11 +19,13 @@ func init() {
 		"drp": testAccProvider,
 	}
 
+	log.Println("Starting test server")
 	err := test.StartServer(os.TempDir(), 8092)
 	if err != nil {
 		panic(err)
 	}
-	defer test.StopServer()
+
+	time.Sleep(10 * time.Second)
 }
 
 func testAccPreCheck(t *testing.T) {
