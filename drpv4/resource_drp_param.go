@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
 )
@@ -105,6 +104,8 @@ func resourceParamCreate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("error creating param: %v", paramResult.Errors)
 	}
 
+	log.Printf("[DEBUG] [resourceParamCreate] paramResult: %v", paramResult)
+
 	return nil
 }
 
@@ -123,7 +124,7 @@ func resourceParamRead(d *schema.ResourceData, meta interface{}) error {
 
 	paramObject := po.(*models.Param)
 
-	spew.Dump(paramObject)
+	log.Printf("[DEBUG] [resourceParamRead] paramObject: %v", paramObject)
 
 	if err := d.Set("name", paramObject.Name); err != nil {
 		return fmt.Errorf("error setting param name: %s", err)
