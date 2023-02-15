@@ -13,7 +13,7 @@ import (
 var testAccProvider *schema.Provider
 var testAccProviders map[string]*schema.Provider
 
-func setupTestSuite(t testing.TB) func(t testing.TB) {
+func init() {
 	testAccProvider = Provider()
 	testAccProviders = map[string]*schema.Provider{
 		"drp": testAccProvider,
@@ -26,11 +26,6 @@ func setupTestSuite(t testing.TB) func(t testing.TB) {
 	}
 
 	time.Sleep(5 * time.Second)
-
-	return func(t testing.TB) {
-		log.Println("Stopping test server")
-		test.StopServer()
-	}
 }
 
 func testAccPreCheck(t *testing.T) {
