@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
 )
@@ -46,6 +47,7 @@ func resourceParam() *schema.Resource {
 			"schema": {
 				Type:        schema.TypeMap,
 				Description: "Param schema",
+				Default:     map[string]interface{}{},
 				ForceNew:    false,
 				Optional:    true,
 			},
@@ -76,6 +78,8 @@ func resourceParamCreate(d *schema.ResourceData, meta interface{}) error {
 	if name == "" {
 		return fmt.Errorf("param name is required")
 	}
+
+	d.SetId(name)
 
 	var paramResult *ParamResult
 
@@ -118,6 +122,8 @@ func resourceParamRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	paramObject := po.(*models.Param)
+
+	spew.Dump(paramObject)
 
 	if err := d.Set("name", paramObject.Name); err != nil {
 		return fmt.Errorf("error setting param name: %s", err)

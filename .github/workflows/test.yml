@@ -25,7 +25,7 @@ jobs:
       - name: Run tests
         env:
           TF_ACC: 1
-          TF_ACC_LOG: debug
+          TF_ACC_LOG: trace
           LOG_LEVEL: debug
           RS_KEY: rocketskates:r0cketsk8ts
         run: |

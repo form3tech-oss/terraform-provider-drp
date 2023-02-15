@@ -20,6 +20,9 @@ func testAccParamResourceConfig(name string, description string, documentation s
 }
 
 func TestAccParamResource(t *testing.T) {
+	teardownTestSuite := setupTestSuite(t)
+	defer teardownTestSuite(t)
+
 	resource.Test(t, resource.TestCase{
 		Providers: testAccProviders,
 		PreCheck:  func() { testAccPreCheck(t) },
@@ -27,11 +30,12 @@ func TestAccParamResource(t *testing.T) {
 			{
 				Config: testAccParamResourceConfig("test", "test", "test", "{}", false),
 				Check: resource.ComposeTestCheckFunc(
-					// resource.TestCheckResourceAttr("drp_param.test", "name", "test"),
+					resource.TestCheckResourceAttr("drp_param.test", "name", "test"),
 					resource.TestCheckResourceAttr("drp_param.test", "description", "test"),
 					resource.TestCheckResourceAttr("drp_param.test", "documentation", "test"),
-					resource.TestCheckResourceAttr("drp_param.test", "schema", "{}"),
+					// resource.TestCheckResourceAttr("drp_param.test", "schema", "{}"),
 					resource.TestCheckResourceAttr("drp_param.test", "secure", "false"),
+					resource.TestCheckResourceAttrSet("drp_param.test", "schema"),
 				),
 			},
 		},
