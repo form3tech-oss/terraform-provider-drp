@@ -15,6 +15,10 @@ type ParamResult struct {
 	Errors    []string
 }
 
+type ParamSchema struct {
+	Type string `json:"type"`
+}
+
 func resourceParam() *schema.Resource {
 	r := &schema.Resource{
 		Create: resourceParamCreate,
@@ -42,10 +46,10 @@ func resourceParam() *schema.Resource {
 				ForceNew:    false,
 				Optional:    true,
 			},
-			"schema": {
-				Type:        schema.TypeMap,
-				Description: "Param schema",
-				Default:     map[string]interface{}{},
+			"type": {
+				Type:        schema.TypeString,
+				Description: "Param type",
+				Default:     "string",
 				ForceNew:    false,
 				Optional:    true,
 			},
@@ -75,16 +79,16 @@ func resourceParamCreate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("param name is required")
 	}
 
-	d.SetId(name)
-
 	var paramResult *ParamResult
 
 	param := models.Param{
 		Name:          name,
 		Description:   d.Get("description").(string),
 		Documentation: d.Get("documentation").(string),
-		Schema:        d.Get("schema").(map[string]interface{}),
-		Secure:        d.Get("secure").(bool),
+		Schema: map[string]interface{}{
+			"type": d.Get("type").(string),
+		},
+		Secure: d.Get("secure").(bool),
 	}
 
 	param.Validate()
@@ -100,6 +104,8 @@ func resourceParamCreate(d *schema.ResourceData, meta interface{}) error {
 	if len(paramResult.Errors) > 0 {
 		return fmt.Errorf("error creating param: %v", paramResult.Errors)
 	}
+
+	d.SetId(paramResult.Param.Key())
 
 	return nil
 }
@@ -131,8 +137,8 @@ func resourceParamRead(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("error setting param documentation: %s", err)
 	}
 
-	if err := d.Set("schema", paramObject.Schema); err != nil {
-		return fmt.Errorf("error setting param schema: %s", err)
+	if err := d.Set("type", paramObject.Schema.(ParamSchema).Type); err != nil {
+		return fmt.Errorf("error setting param type: %s", err)
 	}
 
 	if err := d.Set("secure", paramObject.Secure); err != nil {
@@ -155,8 +161,10 @@ func resourceParamUpdate(d *schema.ResourceData, meta interface{}) error {
 		Name:          name,
 		Description:   d.Get("description").(string),
 		Documentation: d.Get("documentation").(string),
-		Schema:        d.Get("schema").(map[string]interface{}),
-		Secure:        d.Get("secure").(bool),
+		Schema: map[string]interface{}{
+			"type": d.Get("type").(string),
+		},
+		Secure: d.Get("secure").(bool),
 	}
 
 	req := cc.session.Req().Put(param).UrlFor("params", name)
