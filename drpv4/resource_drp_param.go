@@ -1,11 +1,9 @@
 package drpv4
 
 import (
-	"context"
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
 )
@@ -72,11 +70,6 @@ func resourceParam() *schema.Resource {
 func resourceParamCreate(d *schema.ResourceData, meta interface{}) error {
 	cc := meta.(*Config)
 
-	tflog.Debug(context.Background(), "resourceParamCreate", map[string]interface{}{
-		"meta": meta,
-		"data": d,
-	})
-
 	name := d.Get("name").(string)
 	if name == "" {
 		return fmt.Errorf("param name is required")
@@ -108,10 +101,6 @@ func resourceParamCreate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("error creating param: %v", paramResult.Errors)
 	}
 
-	tflog.Debug(context.Background(), "resourceParamCreate result", map[string]interface{}{
-		"paramResult": paramResult,
-	})
-
 	return nil
 }
 
@@ -129,10 +118,6 @@ func resourceParamRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	paramObject := po.(*models.Param)
-
-	tflog.Debug(context.Background(), "resourceParamRead", map[string]interface{}{
-		"paramObject": paramObject,
-	})
 
 	if err := d.Set("name", paramObject.Name); err != nil {
 		return fmt.Errorf("error setting param name: %s", err)
