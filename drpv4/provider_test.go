@@ -19,13 +19,15 @@ func init() {
 		"drp": testAccProvider,
 	}
 
-	log.Println("Starting test server")
-	err := test.StartServer(os.TempDir(), 8092)
-	if err != nil {
-		panic(err)
-	}
+	if os.Getenv("SKIP_TEST_SERVER") == "" {
+		log.Println("Starting test server")
+		err := test.StartServer(os.TempDir(), 8092)
+		if err != nil {
+			panic(err)
+		}
 
-	time.Sleep(5 * time.Second)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func testAccPreCheck(t *testing.T) {

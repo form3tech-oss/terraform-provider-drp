@@ -2,6 +2,7 @@ package drpv4
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -46,12 +47,15 @@ func resourceParam() *schema.Resource {
 				ForceNew:    false,
 				Optional:    true,
 			},
-			"type": {
-				Type:        schema.TypeString,
-				Description: "Param type",
-				Default:     "string",
+			"schema": {
+				Type:        schema.TypeMap,
+				Description: "Param schema",
+				Default:     `{"type":"string"}`,
 				ForceNew:    false,
 				Optional:    true,
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
 			},
 			"secure": {
 				Type:        schema.TypeBool,
@@ -71,32 +75,34 @@ func resourceParam() *schema.Resource {
 	return r
 }
 
-func resourceParamCreate(d *schema.ResourceData, meta interface{}) error {
-	cc := meta.(*Config)
+func resourceParamCreate(d *schema.ResourceData, m interface{}) error {
+	c := m.(*Config)
 
 	name := d.Get("name").(string)
 	if name == "" {
 		return fmt.Errorf("param name is required")
 	}
 
-	var paramResult *ParamResult
-
 	param := models.Param{
 		Name:          name,
 		Description:   d.Get("description").(string),
 		Documentation: d.Get("documentation").(string),
-		Schema: map[string]interface{}{
-			"type": d.Get("type").(string),
-		},
-		Secure: d.Get("secure").(bool),
+		Schema:        d.Get("schema").(map[string]interface{}),
+		Secure:        d.Get("secure").(bool),
 	}
 
 	param.Validate()
-	if len(param.Errors) > 0 {
-		return fmt.Errorf("error validating param: %v", param.Errors)
+	if param.Validation.Error() != "" {
+		return fmt.Errorf("error validating param: %v", param.Error())
 	}
 
-	req := cc.session.Req().Post(param).UrlFor("params")
+	d.SetId(param.Key())
+
+	var paramResult *ParamResult
+
+	log.Printf("Creating param: %+v", param)
+
+	req := c.session.Req().Post(param).UrlFor("params")
 	if err := req.Do(&paramResult); err != nil {
 		return fmt.Errorf("error creating param: %s", err)
 	}
@@ -105,20 +111,13 @@ func resourceParamCreate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("error creating param: %v", paramResult.Errors)
 	}
 
-	d.SetId(paramResult.Param.Key())
-
 	return nil
 }
 
-func resourceParamRead(d *schema.ResourceData, meta interface{}) error {
-	cc := meta.(*Config)
+func resourceParamRead(d *schema.ResourceData, m interface{}) error {
+	c := m.(*Config)
 
-	name := d.Get("name").(string)
-	if name == "" {
-		return fmt.Errorf("param name is required")
-	}
-
-	po, err := cc.session.GetModel("params", name)
+	po, err := c.session.GetModel("params", d.Id())
 	if err != nil {
 		return fmt.Errorf("error reading param: %s", err)
 	}
@@ -137,7 +136,7 @@ func resourceParamRead(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("error setting param documentation: %s", err)
 	}
 
-	if err := d.Set("type", paramObject.Schema.(ParamSchema).Type); err != nil {
+	if err := d.Set("schema", paramObject.Schema.(map[string]interface{})); err != nil {
 		return fmt.Errorf("error setting param type: %s", err)
 	}
 
@@ -148,26 +147,26 @@ func resourceParamRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceParamUpdate(d *schema.ResourceData, meta interface{}) error {
-	cc := meta.(*Config)
+func resourceParamUpdate(d *schema.ResourceData, m interface{}) error {
+	log.Printf("Updating param: %+v", d)
 
-	name := d.Get("name").(string)
-	if name == "" {
-		return fmt.Errorf("param name is required")
-	}
+	c := m.(*Config)
 
 	var paramResult *ParamResult
 	param := models.Param{
-		Name:          name,
+		Name:          d.Get("name").(string),
 		Description:   d.Get("description").(string),
 		Documentation: d.Get("documentation").(string),
-		Schema: map[string]interface{}{
-			"type": d.Get("type").(string),
-		},
-		Secure: d.Get("secure").(bool),
+		Schema:        d.Get("schema").(map[string]interface{}),
+		Secure:        d.Get("secure").(bool),
 	}
 
-	req := cc.session.Req().Put(param).UrlFor("params", name)
+	param.Validate()
+	if param.Validation.Error() != "" {
+		return fmt.Errorf("error validating param: %v", param.Error())
+	}
+
+	req := c.session.Req().Put(param).UrlFor("params", d.Id())
 	if err := req.Do(&paramResult); err != nil {
 		return fmt.Errorf("error updating param: %s", err)
 	}
@@ -179,18 +178,16 @@ func resourceParamUpdate(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceParamDelete(d *schema.ResourceData, meta interface{}) error {
-	cc := meta.(*Config)
+func resourceParamDelete(d *schema.ResourceData, m interface{}) error {
+	log.Printf("Deleting param: %+v", d.State().Attributes)
 
-	name := d.Get("name").(string)
-	if name == "" {
-		return fmt.Errorf("param name is required")
-	}
+	c := m.(*Config)
 
-	_, err := cc.session.DeleteModel("params", name)
+	_, err := c.session.DeleteModel("params", d.Id())
 	if err != nil {
 		return fmt.Errorf("error deleting param: %s", err)
 	}
+	d.SetId("")
 
 	return nil
 }
