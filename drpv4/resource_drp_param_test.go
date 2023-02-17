@@ -54,6 +54,40 @@ func TestAccParamResource(t *testing.T) {
 			},
 			{
 				Config: testAccParamResourceConfig(ParamResource{
+					ResourceName:  "test",
+					Name:          "test123",
+					Documentation: "test",
+					Schema:        `{"type": "string"}`,
+					Secure:        false,
+				}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("drp_param.test", "name", "test123"),
+					resource.TestCheckResourceAttr("drp_param.test", "documentation", "test"),
+					resource.TestCheckResourceAttr("drp_param.test", "schema.%", "1"),
+					resource.TestCheckResourceAttr("drp_param.test", "schema.type", "string"),
+					resource.TestCheckResourceAttr("drp_param.test", "secure", "false"),
+				),
+			},
+			{
+				Config: testAccParamResourceConfig(ParamResource{
+					ResourceName:  "test",
+					Name:          "test123",
+					Description:   "testing some change",
+					Documentation: "test",
+					Schema:        `{"type": "string"}`,
+					Secure:        false,
+				}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("drp_param.test", "name", "test123"),
+					resource.TestCheckResourceAttr("drp_param.test", "description", "testing some change"),
+					resource.TestCheckResourceAttr("drp_param.test", "documentation", "test"),
+					resource.TestCheckResourceAttr("drp_param.test", "schema.%", "1"),
+					resource.TestCheckResourceAttr("drp_param.test", "schema.type", "string"),
+					resource.TestCheckResourceAttr("drp_param.test", "secure", "false"),
+				),
+			},
+			{
+				Config: testAccParamResourceConfig(ParamResource{
 					ResourceName: "test2",
 					Name:         "test2",
 					Description:  "",

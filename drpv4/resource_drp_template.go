@@ -71,13 +71,8 @@ func resourceTemplate() *schema.Resource {
 func resourceTemplateCreate(d *schema.ResourceData, m interface{}) error {
 	c := m.(*Config)
 
-	id := d.Get("template_id").(string)
-	if id == "" {
-		return fmt.Errorf("template id is required")
-	}
-
 	template := models.Template{
-		ID:             id,
+		ID:             d.Get("template_id").(string),
 		Description:    d.Get("description").(string),
 		Contents:       d.Get("contents").(string),
 		StartDelimiter: d.Get("start_delimiter").(string),
@@ -89,9 +84,9 @@ func resourceTemplateCreate(d *schema.ResourceData, m interface{}) error {
 		return fmt.Errorf("template validation failed: %v", template.Error())
 	}
 
-	d.SetId(id)
+	d.SetId(d.Get("template_id").(string))
 
-	log.Printf("Creating template %s", id)
+	log.Printf("Creating template %s", d.Id())
 
 	req := c.session.Req().Post(template).UrlFor("templates")
 	if err := req.Do(&template); err != nil {
@@ -155,7 +150,7 @@ func resourceTemplateUpdate(d *schema.ResourceData, m interface{}) error {
 		return fmt.Errorf("template validation failed: %v", template.Error())
 	}
 
-	req := c.session.Req().Put(template).UrlFor("templates", template.ID)
+	req := c.session.Req().Put(template).UrlFor("templates", d.Id())
 	if err := req.Do(&templateResult); err != nil {
 		return fmt.Errorf("error updating template: %s", err)
 	}

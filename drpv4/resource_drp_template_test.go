@@ -13,6 +13,8 @@ type TemplateResource struct {
 	ID           string
 	Description  string
 	Contents     string
+	StartDelim   string
+	EndDelim     string
 }
 
 func testAccTemplateResourceConfig(template TemplateResource) string {
@@ -21,8 +23,10 @@ func testAccTemplateResourceConfig(template TemplateResource) string {
 			template_id = "%s"
 			description = "%s"
 			contents = "%s"
+			start_delimiter = "%s"
+			end_delimiter = "%s"
 		}
-	`, template.ResourceName, template.ID, template.Description, template.Contents)
+	`, template.ResourceName, template.ID, template.Description, template.Contents, template.StartDelim, template.EndDelim)
 }
 
 func TestAccTemplateResource(t *testing.T) {
@@ -42,6 +46,21 @@ func TestAccTemplateResource(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_template.test", "description", "test"),
 					resource.TestCheckResourceAttr("drp_template.test", "contents", "test"),
 				),
+			},
+			{
+				Config: testAccTemplateResourceConfig(TemplateResource{
+					ResourceName: "test",
+					ID:           "test",
+					Description:  "test",
+					Contents:     "test",
+					StartDelim:   "[[",
+					EndDelim:     "]]",
+				}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("drp_template.test", "start_delimiter", "[["),
+					resource.TestCheckResourceAttr("drp_template.test", "end_delimiter", "]]"),
+				),
+				ExpectNonEmptyPlan: true,
 			},
 			{
 				Config: testAccTemplateResourceConfig(TemplateResource{

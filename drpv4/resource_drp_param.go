@@ -16,10 +16,6 @@ type ParamResult struct {
 	Errors    []string
 }
 
-type ParamSchema struct {
-	Type string `json:"type"`
-}
-
 func resourceParam() *schema.Resource {
 	r := &schema.Resource{
 		Create: resourceParamCreate,
