@@ -25,6 +25,7 @@ func Provider() *schema.Provider {
 			"drp_machine":  resourceMachine(),
 			"drp_param":    resourceParam(),
 			"drp_template": resourceTemplate(),
+			"drp_task":     resourceTask(),
 		},
 
 		// note yet, but potentially pools, params and profiles
