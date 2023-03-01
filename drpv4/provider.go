@@ -30,6 +30,7 @@ func Provider() *schema.Provider {
 			"drp_workflow":    resourceWorkflow(),
 			"drp_subnet":      resourceSubnet(),
 			"drp_reservation": resourceReservation(),
+			"drp_pool":        resourcePool(),
 		},
 
 		// note yet, but potentially pools, params and profiles
