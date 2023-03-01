@@ -28,6 +28,7 @@ func Provider() *schema.Provider {
 			"drp_task":     resourceTask(),
 			"drp_stage":    resourceStage(),
 			"drp_workflow": resourceWorkflow(),
+			"drp_subnet":   resourceSubnet(),
 		},
 
 		// note yet, but potentially pools, params and profiles
