@@ -60,7 +60,6 @@ func TestAccTemplateResource(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_template.test", "start_delimiter", "[["),
 					resource.TestCheckResourceAttr("drp_template.test", "end_delimiter", "]]"),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				Config: testAccTemplateResourceConfig(TemplateResource{
