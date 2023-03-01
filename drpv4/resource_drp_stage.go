@@ -14,9 +14,6 @@ func resourceStage() *schema.Resource {
 		Read:   resourceStageRead,
 		Update: resourceStageUpdate,
 		Delete: resourceStageDelete,
-		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
-		},
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -28,25 +25,21 @@ func resourceStage() *schema.Resource {
 			"description": {
 				Type:        schema.TypeString,
 				Description: "Stage description",
-				ForceNew:    false,
 				Optional:    true,
 			},
 			"documentation": {
 				Type:        schema.TypeString,
 				Description: "Stage documentation",
-				ForceNew:    false,
 				Optional:    true,
 			},
 			"bootenv": {
 				Type:        schema.TypeString,
 				Description: "Stage bootenv",
-				ForceNew:    false,
 				Optional:    true,
 			},
 			"optional_params": {
 				Type:        schema.TypeList,
 				Description: "Stage optional params",
-				ForceNew:    false,
 				Optional:    true,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
@@ -55,13 +48,11 @@ func resourceStage() *schema.Resource {
 			"params": {
 				Type:        schema.TypeMap,
 				Description: "Stage params",
-				ForceNew:    false,
 				Optional:    true,
 			},
 			"profiles": {
 				Type:        schema.TypeList,
 				Description: "Stage profiles",
-				ForceNew:    false,
 				Optional:    true,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
@@ -70,13 +61,11 @@ func resourceStage() *schema.Resource {
 			"reboot": {
 				Type:        schema.TypeBool,
 				Description: "Stage reboot",
-				ForceNew:    false,
 				Optional:    true,
 			},
 			"required_params": {
 				Type:        schema.TypeList,
 				Description: "Stage required params",
-				ForceNew:    false,
 				Optional:    true,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
@@ -85,13 +74,11 @@ func resourceStage() *schema.Resource {
 			"runner_wait": {
 				Type:        schema.TypeBool,
 				Description: "Stage runner wait",
-				ForceNew:    false,
 				Optional:    true,
 			},
 			"tasks": {
 				Type:        schema.TypeList,
 				Description: "Stage tasks",
-				ForceNew:    false,
 				Optional:    true,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
@@ -100,44 +87,38 @@ func resourceStage() *schema.Resource {
 			"template": {
 				Type:        schema.TypeList,
 				Description: "Stage templates",
-				ForceNew:    false,
 				Optional:    true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name": {
 							Type:        schema.TypeString,
 							Description: "Template name",
-							ForceNew:    false,
-							Required:    true,
+
+							Required: true,
 						},
 						"contents": {
 							Type:        schema.TypeString,
 							Description: "Template content",
-							ForceNew:    false,
 							Optional:    true,
 						},
 						"path": {
 							Type:        schema.TypeString,
 							Description: "Template path",
-							ForceNew:    false,
 							Optional:    true,
 						},
 						"template_id": {
 							Type:        schema.TypeString,
 							Description: "Template ID",
-							ForceNew:    false,
 							Optional:    true,
 						},
 						"link": {
 							Type:        schema.TypeString,
 							Description: "Template link",
-							ForceNew:    false,
 							Optional:    true,
 						},
 						"meta": {
 							Type:        schema.TypeMap,
 							Description: "Template meta",
-							ForceNew:    false,
 							Optional:    true,
 							Elem: &schema.Schema{
 								Type: schema.TypeString,
@@ -221,8 +202,7 @@ func resourceStageCreate(d *schema.ResourceData, m interface{}) error {
 
 	log.Printf("[DEBUG] Stage create: %#v", stage)
 
-	err := c.session.CreateModel(stage)
-	if err != nil {
+	if err := c.session.CreateModel(stage); err != nil {
 		return err
 	}
 
