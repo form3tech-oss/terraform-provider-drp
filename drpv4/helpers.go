@@ -1,5 +1,7 @@
 package drpv4
 
+import "math/rand"
+
 // expandStringList converts a interface{} to a []string
 func expandStringList(v interface{}) []string {
 	if v == nil {
@@ -10,4 +12,14 @@ func expandStringList(v interface{}) []string {
 		result[i] = s.(string)
 	}
 	return result
+}
+
+// randomString generates a random string of length n
+func randomString(n int) string {
+	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }
