@@ -9,13 +9,17 @@ import (
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-type ParamResult struct {
-	Param *models.Param
-
-	Available bool
-	Errors    []string
-}
-
+// resourceParam is the Terraform resource for a param
+//
+//	resource "drp_param" "test" {
+//	  name = "test"
+//	  description = "test"
+//	  documentation = "test"
+//	  schema = {
+//		 type = "string"
+//	  }
+//	  secure = false
+//	}
 func resourceParam() *schema.Resource {
 	r := &schema.Resource{
 		Create: resourceParamCreate,
@@ -71,85 +75,30 @@ func resourceParam() *schema.Resource {
 	return r
 }
 
-func resourceParamCreate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	name := d.Get("name").(string)
-	if name == "" {
-		return fmt.Errorf("param name is required")
+// flattenParam converts a param object to a Terraform resource
+func flattenParam(d *schema.ResourceData, param *models.Param) error {
+	if err := d.Set("name", param.Name); err != nil {
+		return fmt.Errorf("error setting name: %s", err)
 	}
-
-	param := models.Param{
-		Name:          name,
-		Description:   d.Get("description").(string),
-		Documentation: d.Get("documentation").(string),
-		Schema:        d.Get("schema").(map[string]interface{}),
-		Secure:        d.Get("secure").(bool),
+	if err := d.Set("description", param.Description); err != nil {
+		return fmt.Errorf("error setting description: %s", err)
 	}
-
-	param.Validate()
-	if param.Validation.Error() != "" {
-		return fmt.Errorf("error validating param: %v", param.Error())
+	if err := d.Set("documentation", param.Documentation); err != nil {
+		return fmt.Errorf("error setting documentation: %s", err)
 	}
-
-	d.SetId(param.Key())
-
-	var paramResult *ParamResult
-
-	log.Printf("Creating param: %+v", param)
-
-	req := c.session.Req().Post(param).UrlFor("params")
-	if err := req.Do(&paramResult); err != nil {
-		return fmt.Errorf("error creating param: %s", err)
+	if err := d.Set("schema", param.Schema); err != nil {
+		return fmt.Errorf("error setting schema: %s", err)
 	}
-
-	if len(paramResult.Errors) > 0 {
-		return fmt.Errorf("error creating param: %v", paramResult.Errors)
+	if err := d.Set("secure", param.Secure); err != nil {
+		return fmt.Errorf("error setting secure: %s", err)
 	}
 
 	return nil
 }
 
-func resourceParamRead(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	po, err := c.session.GetModel("params", d.Id())
-	if err != nil {
-		return fmt.Errorf("error reading param: %s", err)
-	}
-
-	paramObject := po.(*models.Param)
-
-	if err := d.Set("name", paramObject.Name); err != nil {
-		return fmt.Errorf("error setting param name: %s", err)
-	}
-
-	if err := d.Set("description", paramObject.Description); err != nil {
-		return fmt.Errorf("error setting param description: %s", err)
-	}
-
-	if err := d.Set("documentation", paramObject.Documentation); err != nil {
-		return fmt.Errorf("error setting param documentation: %s", err)
-	}
-
-	if err := d.Set("schema", paramObject.Schema.(map[string]interface{})); err != nil {
-		return fmt.Errorf("error setting param type: %s", err)
-	}
-
-	if err := d.Set("secure", paramObject.Secure); err != nil {
-		return fmt.Errorf("error setting param secure: %s", err)
-	}
-
-	return nil
-}
-
-func resourceParamUpdate(d *schema.ResourceData, m interface{}) error {
-	log.Printf("Updating param: %+v", d)
-
-	c := m.(*Config)
-
-	var paramResult *ParamResult
-	param := models.Param{
+// expandParam converts a Terraform resource to a param object
+func expandParam(d *schema.ResourceData) *models.Param {
+	param := &models.Param{
 		Name:          d.Get("name").(string),
 		Description:   d.Get("description").(string),
 		Documentation: d.Get("documentation").(string),
@@ -157,32 +106,63 @@ func resourceParamUpdate(d *schema.ResourceData, m interface{}) error {
 		Secure:        d.Get("secure").(bool),
 	}
 
-	param.Validate()
-	if param.Validation.Error() != "" {
-		return fmt.Errorf("error validating param: %v", param.Error())
+	return param
+}
+
+func resourceParamCreate(d *schema.ResourceData, m interface{}) error {
+	c := m.(*Config)
+
+	log.Printf("Creating param: %+v", d)
+
+	param := expandParam(d)
+
+	log.Printf("Creating param: %+v", param)
+
+	if err := c.session.CreateModel(param); err != nil {
+		return fmt.Errorf("error creating param: %s", err)
 	}
 
-	req := c.session.Req().Put(param).UrlFor("params", d.Id())
-	if err := req.Do(&paramResult); err != nil {
+	d.SetId(param.Key())
+
+	return resourceParamRead(d, m)
+}
+
+func resourceParamRead(d *schema.ResourceData, m interface{}) error {
+	c := m.(*Config)
+
+	log.Printf("Reading param: %+v", d)
+
+	po, err := c.session.GetModel("params", d.Id())
+	if err != nil {
+		return fmt.Errorf("error reading param: %s", err)
+	}
+
+	return flattenParam(d, po.(*models.Param))
+}
+
+func resourceParamUpdate(d *schema.ResourceData, m interface{}) error {
+	c := m.(*Config)
+
+	log.Printf("Updating param: %+v", d)
+
+	param := expandParam(d)
+
+	if err := c.session.PutModel(param); err != nil {
 		return fmt.Errorf("error updating param: %s", err)
 	}
 
-	if len(paramResult.Errors) > 0 {
-		return fmt.Errorf("error updating param: %v", paramResult.Errors)
-	}
-
-	return nil
+	return resourceParamRead(d, m)
 }
 
 func resourceParamDelete(d *schema.ResourceData, m interface{}) error {
-	log.Printf("Deleting param: %+v", d.State().Attributes)
-
 	c := m.(*Config)
 
-	_, err := c.session.DeleteModel("params", d.Id())
-	if err != nil {
+	log.Printf("Deleting param: %s", d.Id())
+
+	if _, err := c.session.DeleteModel("params", d.Id()); err != nil {
 		return fmt.Errorf("error deleting param: %s", err)
 	}
+
 	d.SetId("")
 
 	return nil
