@@ -5,16 +5,16 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"gitlab.com/rackn/provision/v4/models"
 )
 
 // resourceProfileParam represents a profile param in DRP system
 //
 //		resource "drp_profile_param" "profile_param" {
-//	   profile = "test"
-//		  name = "test"
-//		  schema = {
-//		    type = "string"
-//		  }
+//		 profile = "test"
+//		 name = "test"
+//		 value = "test"
+//	  	 secure_value = "test"
 //		}
 func resourceProfileParam() *schema.Resource {
 	r := &schema.Resource{
@@ -36,19 +36,45 @@ func resourceProfileParam() *schema.Resource {
 				Required:    true,
 				ForceNew:    true,
 			},
-			"schema": {
-				Type:        schema.TypeMap,
-				Description: "Param schema",
-				Default:     `{"type":"string"}`,
+			"value": {
+				Type:         schema.TypeString,
+				Description:  "Param value",
+				Optional:     true,
+				Sensitive:    false,
+				ExactlyOneOf: []string{"value", "secure_value"},
+			},
+			"secure_value": {
+				Type:        schema.TypeString,
+				Description: "Param secure value",
 				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
+				Sensitive:   true,
 			},
 		},
 	}
 
 	return r
+}
+
+// isParamSecure returns true if the param is secure
+func isParamSecure(c *Config, name string) bool {
+	res, err := c.session.GetModel("params", name)
+	if err != nil {
+		return false
+	}
+
+	param := res.(*models.Param)
+
+	return param.Secure
+}
+
+// getPublickey returns the public key from DRP to use for encrypting secure params
+func getPublickey(c *Config, profile string) ([]byte, error) {
+	var pubkey []byte
+	if err := c.session.Req().UrlFor("profiles", profile, "pubkey").Do(&pubkey); err != nil {
+		return nil, err
+	}
+
+	return pubkey, nil
 }
 
 // resourceProfileParamCreate creates a profile param in the DRP system
@@ -57,13 +83,36 @@ func resourceProfileParamCreate(d *schema.ResourceData, m interface{}) error {
 
 	profile := d.Get("profile").(string)
 	name := d.Get("name").(string)
-	paramSchema := d.Get("schema").(map[string]interface{})
+	value := d.Get("value").(string)
+	secureValue := d.Get("secure_value").(string)
 
 	log.Printf("Creating profile param %s", name)
 
-	err := c.session.Req().Post(paramSchema).UrlFor("profiles", profile, "params", name).Do(nil)
-	if err != nil {
-		return err
+	if value != "" && isParamSecure(c, name) {
+		return fmt.Errorf("param %s is secure, use secure_value instead", name)
+	}
+
+	req := c.session.Req().UrlFor("profiles", profile, "params", name)
+
+	if secureValue != "" {
+		sv := models.SecureData{}
+		pubkey, err := getPublickey(c, profile)
+		if err != nil {
+			return err
+		}
+
+		err = sv.Marshal(pubkey, value)
+		if err != nil {
+			return err
+		}
+
+		if err := req.Post(sv).Do(nil); err != nil {
+			return err
+		}
+	} else {
+		if err := req.Post(value).Do(nil); err != nil {
+			return err
+		}
 	}
 
 	d.SetId(fmt.Sprintf("%s/%s", profile, name))
@@ -77,36 +126,28 @@ func resourceProfileParamRead(d *schema.ResourceData, m interface{}) error {
 
 	profile := d.Get("profile").(string)
 	name := d.Get("name").(string)
+	secureValue := d.Get("secure_value").(string)
 
 	log.Printf("Reading profile param %s", name)
 
-	var p map[string]interface{}
+	var p interface{}
 	if err := c.session.Req().UrlFor("profiles", profile, "params", name).Do(&p); err != nil {
 		return err
 	}
 
 	d.Set("name", name)
 	d.Set("profile", profile)
-	d.Set("schema", p)
+
+	if secureValue == "" {
+		d.Set("value", p)
+	}
 
 	return nil
 }
 
 // resourceProfileParamUpdate updates a profile param in the DRP system
 func resourceProfileParamUpdate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	name := d.Get("name").(string)
-	profile := d.Get("profile").(string)
-	paramSchema := d.Get("schema").(map[string]interface{})
-
-	log.Printf("Updating profile param %s", name)
-
-	if err := c.session.Req().Post(paramSchema).UrlFor("profiles", profile, "params", name).Do(nil); err != nil {
-		return err
-	}
-
-	return resourceProfileParamRead(d, m)
+	return resourceProfileParamCreate(d, m)
 }
 
 // resourceProfileParamDelete deletes a profile param from the DRP system
