@@ -1,6 +1,7 @@
 package drpv4
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -134,19 +135,67 @@ func resourceStage() *schema.Resource {
 }
 
 // flattenStage flattens a Stage from a Terraform ResourceData
-func flattenStage(d *schema.ResourceData, stage *models.Stage) {
-	d.Set("name", stage.Name)
-	d.Set("description", stage.Description)
-	d.Set("documentation", stage.Documentation)
-	d.Set("bootenv", stage.BootEnv)
-	d.Set("optional_params", stage.OptionalParams)
-	d.Set("params", stage.Params)
-	d.Set("profiles", stage.Profiles)
-	d.Set("reboot", stage.Reboot)
-	d.Set("required_params", stage.RequiredParams)
-	d.Set("runner_wait", stage.RunnerWait)
-	d.Set("tasks", stage.Tasks)
-	d.Set("template", flattenTemplates(stage.Templates))
+func flattenStage(d *schema.ResourceData, stage *models.Stage) error {
+	if err := d.Set("name", stage.Name); err != nil {
+		return fmt.Errorf("error setting name: %s", err)
+	}
+	if err := d.Set("description", stage.Description); err != nil {
+		return fmt.Errorf("error setting description: %s", err)
+	}
+	if err := d.Set("documentation", stage.Documentation); err != nil {
+		return fmt.Errorf("error setting documentation: %s", err)
+	}
+	if err := d.Set("bootenv", stage.BootEnv); err != nil {
+		return fmt.Errorf("error setting bootenv: %s", err)
+	}
+	if err := d.Set("optional_params", stage.OptionalParams); err != nil {
+		return fmt.Errorf("error setting optional_params: %s", err)
+	}
+	if err := d.Set("params", stage.Params); err != nil {
+		return fmt.Errorf("error setting params: %s", err)
+	}
+	if err := d.Set("profiles", stage.Profiles); err != nil {
+		return fmt.Errorf("error setting profiles: %s", err)
+	}
+	if err := d.Set("reboot", stage.Reboot); err != nil {
+		return fmt.Errorf("error setting reboot: %s", err)
+	}
+	if err := d.Set("required_params", stage.RequiredParams); err != nil {
+		return fmt.Errorf("error setting required_params: %s", err)
+	}
+	if err := d.Set("runner_wait", stage.RunnerWait); err != nil {
+		return fmt.Errorf("error setting runner_wait: %s", err)
+	}
+	if err := d.Set("tasks", stage.Tasks); err != nil {
+		return fmt.Errorf("error setting tasks: %s", err)
+	}
+	if err := d.Set("template", flattenTemplates(stage.Templates)); err != nil {
+		return fmt.Errorf("error setting template: %s", err)
+	}
+	return nil
+}
+
+// expandStageTemplates expands a list of Templates from a Terraform ResourceData
+func expandStageTemplates(templates interface{}) []models.TemplateInfo {
+	if templates == nil {
+		return nil
+	}
+
+	t := make([]models.TemplateInfo, len(templates.([]interface{})))
+	for i, template := range templates.([]interface{}) {
+		tpl := template.(map[string]interface{})
+
+		t[i] = models.TemplateInfo{
+			Name:     tpl["name"].(string),
+			Contents: tpl["contents"].(string),
+			Path:     tpl["path"].(string),
+			ID:       tpl["template_id"].(string),
+			Link:     tpl["link"].(string),
+			Meta:     expandMapInterface(tpl["meta"].(map[string]interface{})),
+		}
+	}
+
+	return t
 }
 
 // expandStage expands a Stage from a Terraform ResourceData
@@ -163,35 +212,9 @@ func expandStage(d *schema.ResourceData) *models.Stage {
 		RequiredParams: expandStringList(d.Get("required_params")),
 		RunnerWait:     d.Get("runner_wait").(bool),
 		Tasks:          expandStringList(d.Get("tasks")),
-		Templates:      expandTemplateStage(d.Get("template").([]interface{})),
+		Templates:      expandStageTemplates(d.Get("template")),
 	}
 	return stage
-}
-
-// expandTemplateStage expands a list of Templates from a Terraform ResourceData
-func expandTemplateStage(templates interface{}) []models.TemplateInfo {
-	if templates == nil {
-		return nil
-	}
-
-	t := make([]models.TemplateInfo, len(templates.([]interface{})))
-	for i, template := range templates.([]interface{}) {
-		tpl := template.(map[string]interface{})
-
-		t[i] = models.TemplateInfo{
-			Name:     tpl["name"].(string),
-			Contents: tpl["contents"].(string),
-			Path:     tpl["path"].(string),
-			ID:       tpl["template_id"].(string),
-			Link:     tpl["link"].(string),
-			Meta:     map[string]string{},
-		}
-
-		for k, v := range tpl["meta"].(map[string]interface{}) {
-			t[i].Meta[k] = v.(string)
-		}
-	}
-	return t
 }
 
 // resourceStageCreate creates a new Stage
@@ -224,11 +247,7 @@ func resourceStageRead(d *schema.ResourceData, m interface{}) error {
 
 	log.Printf("[DEBUG] Stage read: %#v", res)
 
-	stage := res.(*models.Stage)
-
-	flattenStage(d, stage)
-
-	return nil
+	return flattenStage(d, res.(*models.Stage))
 }
 
 // resourceStageUpdate updates a Stage
@@ -253,12 +272,10 @@ func resourceStageDelete(d *schema.ResourceData, m interface{}) error {
 
 	log.Printf("[DEBUG] Stage delete: %s", d.Id())
 
-	res, err := c.session.DeleteModel("stages", d.Id())
+	_, err := c.session.DeleteModel("stages", d.Id())
 	if err != nil {
 		return err
 	}
-
-	log.Printf("[DEBUG] Stage delete: %#v", res)
 
 	d.SetId("")
 
