@@ -1,0 +1,61 @@
+name: Test
+on:
+  push:
+jobs:
+  setup-drp:
+    name: Setup DRP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Setup DRP
+        run: |
+          curl -fsSL get.rebar.digital/stable | bash -s -- install --isolated --version=stable
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: drp
+          path: |
+            bin/**/*
+            assets
+            drp-data
+            tools
+  acceptance:
+    name: Acc Test for Terraform ${{ matrix.tf_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tf_version: ["0.13", "0.14", "0.15", "1.0", "1.1", "1.2", "1.3", "1.4"]
+    needs: setup-drp
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: drp
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Configure DRP
+        run: |
+          chmod +x $(pwd)/bin/linux/amd64/dr-provision
+          ln -s $(pwd)/bin/linux/amd64/dr-provision /usr/local/bin/dr-provision
+          dr-provision --version
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ~${{ matrix.tf_version }}
+          terraform_wrapper: false
+      - name: Run tests
+        env:
+          TF_ACC: 1
+          TF_ACC_LOG: trace
+          LOG_LEVEL: debug
+          RS_KEY: rocketskates:r0cketsk8ts
+        run: |
+          go test -v ./drpv4 -cover -timeout 30m -count 1

@@ -7,10 +7,11 @@ package drpv4
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"log"
 	"strings"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 /*
@@ -21,7 +22,16 @@ func Provider() *schema.Provider {
 	return &schema.Provider{
 
 		ResourcesMap: map[string]*schema.Resource{
-			"drp_machine": resourceMachine(),
+			"drp_machine":       resourceMachine(),
+			"drp_param":         resourceParam(),
+			"drp_template":      resourceTemplate(),
+			"drp_task":          resourceTask(),
+			"drp_stage":         resourceStage(),
+			"drp_workflow":      resourceWorkflow(),
+			"drp_subnet":        resourceSubnet(),
+			"drp_reservation":   resourceReservation(),
+			"drp_pool":          resourcePool(),
+			"drp_profile_param": resourceProfileParam(),
 		},
 
 		// note yet, but potentially pools, params and profiles
