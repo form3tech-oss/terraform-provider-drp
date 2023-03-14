@@ -93,7 +93,7 @@ func TestAccStageResource(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_stage.test", "params.%", "1"),
 					resource.TestCheckResourceAttr("drp_stage.test", "params.test", "test"),
 					resource.TestCheckResourceAttr("drp_stage.test", "runner_wait", "true"),
-					resource.TestCheckNoResourceAttr("drp_stage.test", "optional_params"),
+					resource.TestCheckTypeSetElemAttr("drp_stage.test", "optional_params.*", "0"),
 				),
 			},
 			{
