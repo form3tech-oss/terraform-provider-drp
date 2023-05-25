@@ -3,6 +3,7 @@ package drpv4
 import (
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -53,6 +54,66 @@ func resourceProfileParam() *schema.Resource {
 	}
 
 	return r
+}
+
+// getParam return the param
+func getParam(c *Config, name string) (*models.Param, error) {
+	var p *models.Param
+
+	if err := c.session.Req().UrlFor("params", name).Do(&p); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+// getParamType returns the type of the parameter
+func getParamSchemaType(c *Config, name string) string {
+	param, err := getParam(c, name)
+	if err != nil {
+		return "string"
+	}
+
+	s := param.Schema.(map[string]interface{})["type"].(string)
+
+	return s
+}
+
+// convertParamToType returns the value in the correct type
+func convertParamToType(value string, valueType string) (interface{}, error) {
+	if valueType == "string" {
+		return value, nil
+	}
+
+	switch valueType {
+	case "integer":
+		return strconv.Atoi(value)
+	case "number":
+		return strconv.ParseFloat(value, 32)
+	case "boolean":
+		return strconv.ParseBool(value)
+	case "string":
+	case "array":
+	case "map":
+	default:
+		return value, nil
+	}
+
+	return value, nil
+}
+
+// convertParamToType returns the value in the correct type
+func convertParamFromType(value interface{}, valueType string) (string, error) {
+	switch valueType {
+	case "integer":
+		return strconv.FormatFloat(value.(float64), 'f', 0, 64), nil
+	case "number":
+		return strconv.FormatFloat(value.(float64), 'f', 6, 64), nil
+	case "boolean":
+		return strconv.FormatBool(value.(bool)), nil
+	default:
+		return value.(string), nil
+	}
 }
 
 // isParamSecure returns true if the param is secure
@@ -110,7 +171,14 @@ func resourceProfileParamCreate(d *schema.ResourceData, m interface{}) error {
 			return err
 		}
 	} else {
-		if err := req.Post(value).Do(nil); err != nil {
+		paramType := getParamSchemaType(c, name)
+
+		convertedValue, err := convertParamToType(value, paramType)
+		if err != nil {
+			return err
+		}
+
+		if err := req.Post(convertedValue).Do(nil); err != nil {
 			return err
 		}
 	}
@@ -139,7 +207,14 @@ func resourceProfileParamRead(d *schema.ResourceData, m interface{}) error {
 	d.Set("profile", profile)
 
 	if secureValue == "" {
-		d.Set("value", p)
+		paramType := getParamSchemaType(c, name)
+
+		value, err := convertParamFromType(p, paramType)
+		if err != nil {
+			return err
+		}
+
+		d.Set("value", value)
 	}
 
 	return nil
