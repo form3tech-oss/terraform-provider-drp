@@ -74,6 +74,10 @@ func getParamSchemaType(c *Config, name string) string {
 		return "string"
 	}
 
+	if param.Schema == nil || param.Schema.(map[string]interface{})["type"] == nil {
+		return "string"
+	}
+
 	s := param.Schema.(map[string]interface{})["type"].(string)
 
 	return s
