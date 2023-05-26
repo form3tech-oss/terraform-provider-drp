@@ -54,6 +54,23 @@ func TestAccResourceProfileParam(t *testing.T) {
 			{
 				Config: fmt.Sprintf(`
 					resource "drp_param" "%s" {
+						name = "test_nil_schema"
+						description = "Testing nil schema"
+					}
+
+					resource "drp_profile_param" "%s" {
+						profile = "global"
+						name = drp_param.%s.name
+						value = "test"
+					}
+				`, profileParamName, profileParamName, profileParamName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile_param.%s", profileParamName), "value", "test"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+					resource "drp_param" "%s" {
 						name = "my_password"
 						description = "Password"
 						schema = {
