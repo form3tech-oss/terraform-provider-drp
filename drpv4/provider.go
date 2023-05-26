@@ -31,6 +31,7 @@ func Provider() *schema.Provider {
 			"drp_subnet":        resourceSubnet(),
 			"drp_reservation":   resourceReservation(),
 			"drp_pool":          resourcePool(),
+			"drp_profile":       resourceProfile(),
 			"drp_profile_param": resourceProfileParam(),
 		},
 
