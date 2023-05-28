@@ -1,9 +1,9 @@
 package drpv4
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -56,67 +56,24 @@ func resourceProfileParam() *schema.Resource {
 	return r
 }
 
-// getParam return the param
-func getParam(c *Config, name string) (*models.Param, error) {
-	var p *models.Param
-
-	if err := c.session.Req().UrlFor("params", name).Do(&p); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-// getParamType returns the type of the parameter
-func getParamSchemaType(c *Config, name string) string {
-	param, err := getParam(c, name)
+// convertParamToType returns the value in the correct type
+func convertParamToType(value string) (interface{}, error) {
+	var out interface{}
+	err := json.Unmarshal([]byte(value), &out)
 	if err != nil {
-		return "string"
-	}
-
-	if param.Schema == nil || param.Schema.(map[string]interface{})["type"] == nil {
-		return "string"
-	}
-
-	s := param.Schema.(map[string]interface{})["type"].(string)
-
-	return s
-}
-
-// convertParamToType returns the value in the correct type
-func convertParamToType(value string, valueType string) (interface{}, error) {
-	if valueType == "string" {
 		return value, nil
 	}
-
-	switch valueType {
-	case "integer":
-		return strconv.Atoi(value)
-	case "number":
-		return strconv.ParseFloat(value, 32)
-	case "boolean":
-		return strconv.ParseBool(value)
-	case "string":
-	case "array":
-	case "map":
-	default:
-		return value, nil
-	}
-
-	return value, nil
+	return out, nil
 }
 
-// convertParamToType returns the value in the correct type
-func convertParamFromType(value interface{}, valueType string) (string, error) {
-	switch valueType {
-	case "integer":
-		return strconv.FormatFloat(value.(float64), 'f', 0, 64), nil
-	case "number":
-		return strconv.FormatFloat(value.(float64), 'f', 6, 64), nil
-	case "boolean":
-		return strconv.FormatBool(value.(bool)), nil
+// convertParamToString returns the value in the correct type
+func convertParamToString(value interface{}) (string, error) {
+	switch value := value.(type) {
+	case string:
+		return value, nil
 	default:
-		return value.(string), nil
+		out, err := json.Marshal(value)
+		return string(out), err
 	}
 }
 
@@ -175,9 +132,7 @@ func resourceProfileParamCreate(d *schema.ResourceData, m interface{}) error {
 			return err
 		}
 	} else {
-		paramType := getParamSchemaType(c, name)
-
-		convertedValue, err := convertParamToType(value, paramType)
+		convertedValue, err := convertParamToType(value)
 		if err != nil {
 			return err
 		}
@@ -211,9 +166,7 @@ func resourceProfileParamRead(d *schema.ResourceData, m interface{}) error {
 	d.Set("profile", profile)
 
 	if secureValue == "" {
-		paramType := getParamSchemaType(c, name)
-
-		value, err := convertParamFromType(p, paramType)
+		value, err := convertParamToString(p)
 		if err != nil {
 			return err
 		}
