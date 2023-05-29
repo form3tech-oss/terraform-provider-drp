@@ -56,14 +56,48 @@ func resourceProfileParam() *schema.Resource {
 	return r
 }
 
-// convertParamToType returns the value in the correct type
-func convertParamToType(value string) (interface{}, error) {
-	var out interface{}
-	err := json.Unmarshal([]byte(value), &out)
-	if err != nil {
-		return value, nil
+// getParam return the param
+func getParam(c *Config, name string) (*models.Param, error) {
+	var p *models.Param
+
+	if err := c.session.Req().UrlFor("params", name).Do(&p); err != nil {
+		return nil, err
 	}
-	return out, nil
+
+	return p, nil
+}
+
+// getParamType returns the type of the parameter
+func getParamSchemaType(c *Config, name string) string {
+	param, err := getParam(c, name)
+	if err != nil {
+		return ""
+	}
+
+	if param.Schema == nil || param.Schema.(map[string]interface{})["type"] == nil {
+		return ""
+	}
+
+	s := param.Schema.(map[string]interface{})["type"].(string)
+
+	return s
+}
+
+// convertParamToType returns the value in the correct type
+func convertParamToType(c *Config, name string, value string) (interface{}, error) {
+	paramType := getParamSchemaType(c, name)
+
+	switch paramType {
+	case "string":
+		return value, nil
+	default:
+		var out interface{}
+		err := json.Unmarshal([]byte(value), &out)
+		if err != nil {
+			return value, nil
+		}
+		return out, nil
+	}
 }
 
 // convertParamToString returns the value in the correct type
@@ -132,7 +166,7 @@ func resourceProfileParamCreate(d *schema.ResourceData, m interface{}) error {
 			return err
 		}
 	} else {
-		convertedValue, err := convertParamToType(value)
+		convertedValue, err := convertParamToType(c, name, value)
 		if err != nil {
 			return err
 		}
