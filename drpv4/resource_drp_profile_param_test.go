@@ -53,6 +53,20 @@ func TestAccResourceProfileParam(t *testing.T) {
 			},
 			{
 				Config: fmt.Sprintf(`
+					resource "drp_profile_param" "%s" {
+						profile = "global"
+						name = "test_json_value"
+						value = jsonencode({
+							test = "test"
+						})
+					}
+				`, profileParamName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile_param.%s", profileParamName), "value", `{"test":"test"}`),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
 					resource "drp_param" "%s" {
 						name = "test_nil_schema"
 						description = "Testing nil schema"
@@ -66,6 +80,47 @@ func TestAccResourceProfileParam(t *testing.T) {
 				`, profileParamName, profileParamName, profileParamName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile_param.%s", profileParamName), "value", "test"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+					resource "drp_param" "%s" {
+						name = "test_nil_schema_json"
+						description = "Testing nil schema"
+					}
+
+					resource "drp_profile_param" "%s" {
+						profile = "global"
+						name = drp_param.%s.name
+						value = jsonencode({
+							test = "test"
+						})
+					}
+				`, profileParamName, profileParamName, profileParamName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile_param.%s", profileParamName), "value", `{"test":"test"}`),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+					resource "drp_param" "%s" {
+						name = "test_string_schema_json"
+						description = "Testing string schema"
+						schema = {
+							type = "string"
+						}
+					}
+
+					resource "drp_profile_param" "%s" {
+						profile = "global"
+						name = drp_param.%s.name
+						value = jsonencode({
+							test = "test"
+						})
+					}
+				`, profileParamName, profileParamName, profileParamName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile_param.%s", profileParamName), "value", `{"test":"test"}`),
 				),
 			},
 			{
