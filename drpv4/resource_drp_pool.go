@@ -74,7 +74,7 @@ func resourcePool() *schema.Resource {
 				Optional:    true,
 				Description: "The pool add parameters.",
 				Elem: &schema.Schema{
-					Type: schema.TypeMap,
+					Type: schema.TypeString,
 				},
 			},
 			"add_profiles": {

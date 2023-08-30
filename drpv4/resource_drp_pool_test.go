@@ -82,7 +82,7 @@ func TestAccResourcePool(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_pool.test", "autofill.#", "1"),
 					resource.TestCheckResourceAttr("drp_pool.test", "autofill.0.max_free", "1"),
 				),
-				ExpectNonEmptyPlan: true,
+				ExpectNonEmptyPlan: false,
 			},
 			{
 				Config: fmt.Sprintf(`
@@ -153,7 +153,60 @@ func TestAccResourcePool(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_pool.test", "autofill.#", "1"),
 					resource.TestCheckResourceAttr("drp_pool.test", "autofill.0.max_free", "1"),
 				),
-				ExpectNonEmptyPlan: true,
+				ExpectNonEmptyPlan: false,
+			},
+			{
+				Config: fmt.Sprintf(`
+					resource "drp_stage" "test" {
+						name = "%s"
+						template {
+							name = "test"
+							contents = <<-EOF
+							#!/bin/bash
+
+							echo "test"
+							EOF
+							path = "/tmp/test"
+						}
+					}
+
+					resource "drp_workflow" "test" {
+						name = "%s"
+						description = "test"
+						stages = [drp_stage.test.name]
+					}
+
+					resource "drp_pool" "test-param" {
+						pool_id = "%s-param"
+						description = "test pool"
+						documentation = "test pool"
+
+						allocate_actions {
+							workflow = drp_workflow.test.name
+							remove_parameters = ["test"]
+							add_parameters = {
+								"universal/application" = "image-deploy"
+							}
+						}
+
+						release_actions {
+							workflow = drp_workflow.test.name
+							add_parameters = {
+								"universal/application" = "hw-only"
+							}
+						}
+					}
+				`, testPoolRandomName, testPoolRandomName, testPoolRandomName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.#", "1"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.0.add_parameters.%", "1"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", `allocate_actions.0.add_parameters.universal/application`, "image-deploy"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", "release_actions.#", "1"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", "release_actions.0.add_parameters.%", "1"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", `release_actions.0.add_parameters.universal/application`, "hw-only"),
+				),
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})
