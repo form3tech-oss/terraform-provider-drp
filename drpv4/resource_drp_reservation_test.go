@@ -19,7 +19,7 @@ func TestAccResourceReservation(t *testing.T) {
 						description = "test reservation"
 						documentation = "test reservation"
 						duration = 86400
-						token = "test"
+						token = "ff:70:81:a9:78:4d"
 						subnet = "255.255.255.0"
 					}
 				`,
@@ -28,7 +28,7 @@ func TestAccResourceReservation(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_reservation.test", "description", "test reservation"),
 					resource.TestCheckResourceAttr("drp_reservation.test", "documentation", "test reservation"),
 					resource.TestCheckResourceAttr("drp_reservation.test", "duration", "86400"),
-					resource.TestCheckResourceAttr("drp_reservation.test", "token", "test"),
+					resource.TestCheckResourceAttr("drp_reservation.test", "token", "ff:70:81:a9:78:4d"),
 					resource.TestCheckResourceAttr("drp_reservation.test", "subnet", "255.255.255.0"),
 				),
 			},
@@ -39,7 +39,7 @@ func TestAccResourceReservation(t *testing.T) {
 						description = "test reservation"
 						documentation = "test reservation"
 						duration = 86400
-						token = "test"
+						token = "ff:70:81:a9:78:4d"
 						next_server = "192.168.1.1"
 						subnet = "255.255.255.0"
 
@@ -60,7 +60,7 @@ func TestAccResourceReservation(t *testing.T) {
 						description = "test reservation"
 						documentation = "test reservation"
 						duration = 86400
-						token = "test"
+						token = "ff:70:81:a9:78:4d"
 						subnet = "255.255.255.0"
 					}
 				`,
@@ -75,7 +75,7 @@ func TestAccResourceReservation(t *testing.T) {
 						description = "test reservation"
 						documentation = "test reservation"
 						duration = 86400
-						token = "test"
+						token = "ff:70:81:a9:78:4d"
 						subnet = "255.255.255.0"
 					}
 				`,
