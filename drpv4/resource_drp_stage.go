@@ -76,6 +76,7 @@ func resourceStage() *schema.Resource {
 				Type:        schema.TypeBool,
 				Description: "Stage runner wait",
 				Optional:    true,
+				Computed:    true,
 			},
 			"tasks": {
 				Type:        schema.TypeList,
