@@ -41,7 +41,6 @@ func TestAccWorkflowResource(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.#", "1"),
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", testWorkflowRandomName),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				Config: fmt.Sprintf(`
@@ -69,7 +68,6 @@ func TestAccWorkflowResource(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.#", "1"),
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", testWorkflowRandomName),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				Config: fmt.Sprintf(`
@@ -97,7 +95,6 @@ func TestAccWorkflowResource(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.#", "1"),
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", testWorkflowRandomName),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
