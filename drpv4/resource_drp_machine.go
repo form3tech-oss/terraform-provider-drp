@@ -186,7 +186,7 @@ func resourceMachineRead(d *schema.ResourceData, m interface{}) error {
 	machineObject := mo.(*models.Machine)
 
 	d.Set("status", machineObject.PoolStatus)
-	d.Set("address", machineObject.Address)
+	d.Set("address", machineObject.Address.String())
 	d.Set("name", machineObject.Name)
 
 	return nil
@@ -215,6 +215,16 @@ func resourceMachineRelease(d *schema.ResourceData, m interface{}) error {
 		return fmt.Errorf("Requires Pool")
 	}
 	log.Printf("[DEBUG] Releasing %s from %s", uuid, pool)
+
+	// Getting machine state
+	err := resourceMachineRead(d, m)
+	if err != nil {
+		return fmt.Errorf("failed to read machine data: %s", err)
+	}
+
+	if d.Get("status").(string) == "Free" {
+		return nil
+	}
 
 	pr := []*models.PoolResult{}
 	parms := map[string]interface{}{
