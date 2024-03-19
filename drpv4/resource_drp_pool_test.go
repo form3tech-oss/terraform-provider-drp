@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 var testPoolRandomName = fmt.Sprintf("test-%s", randomString(10))
 
 func TestAccResourcePool(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		Providers: testAccProviders,
-		PreCheck:  func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`

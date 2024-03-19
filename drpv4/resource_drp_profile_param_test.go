@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 var profileParamName = fmt.Sprintf("test-%s", randomString(10))
@@ -13,8 +13,8 @@ var profileParamName = fmt.Sprintf("test-%s", randomString(10))
 func TestAccResourceProfileParam(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`

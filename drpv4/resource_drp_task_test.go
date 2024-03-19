@@ -3,13 +3,13 @@ package drpv4
 import (
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccTaskResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		Providers: testAccProviders,
-		PreCheck:  func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{
 				Config: `

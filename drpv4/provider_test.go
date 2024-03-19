@@ -6,19 +6,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"gitlab.com/rackn/provision/v4/test"
 )
 
-var testAccProvider *schema.Provider
-var testAccProviders map[string]*schema.Provider
+const (
+	providerConfig string = `
+	provider "drp" {
+		username = "rocketskates"
+		password = "r0ck3tsk4t3s"
+		endpoint = "https://127.0.0.1:8092
+	}
+	`
+)
+
+var (
+	testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
+		"drp": providerserver.NewProtocol6WithError(New("test")()),
+	}
+)
 
 func init() {
-	testAccProvider = Provider()
-	testAccProviders = map[string]*schema.Provider{
-		"drp": testAccProvider,
-	}
-
 	if os.Getenv("SKIP_TEST_SERVER") == "" {
 		log.Println("Starting test server")
 		err := test.StartServer(os.TempDir(), 8092)
