@@ -151,14 +151,18 @@ func resourceProfileParamCreate(d *schema.ResourceData, m interface{}) error {
 	req := c.session.Req().UrlFor("profiles", profile, "params", name)
 
 	if secureValue != "" {
-		sv := models.SecureData{}
+		sv := &models.SecureData{}
 		pubkey, err := getPublickey(c, profile)
 		if err != nil {
 			return err
 		}
 
-		err = sv.Marshal(pubkey, value)
+		err = sv.Marshal(pubkey, secureValue)
 		if err != nil {
+			return err
+		}
+
+		if err := sv.Validate(); err != nil {
 			return err
 		}
 
