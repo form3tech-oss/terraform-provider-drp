@@ -58,5 +58,6 @@ jobs:
           TF_ACC_LOG: trace
           LOG_LEVEL: debug
           RS_KEY: rocketskates:r0cketsk8ts
+          RS_DISABLE_DNS: true
         run: |
           go test -v ./drpv4 -cover -timeout 30m -count 1
