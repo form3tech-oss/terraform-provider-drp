@@ -210,6 +210,15 @@ func resourceProfileParamRead(d *schema.ResourceData, m interface{}) error {
 		}
 
 		d.Set("value", value)
+		d.Set("secure_value", nil)
+	} else {
+		d.Set("value", nil)
+
+		var securedValue string
+		if err := c.session.Req().UrlFor("profiles", profile, "params", name).Params("decode", "true").Do(&securedValue); err != nil {
+			return err
+		}
+		d.Set("secure_value", securedValue)
 	}
 
 	return nil
