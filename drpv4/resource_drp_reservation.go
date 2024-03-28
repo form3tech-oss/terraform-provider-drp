@@ -70,6 +70,7 @@ func resourceReservation() *schema.Resource {
 				Type:        schema.TypeBool,
 				Description: "Reservation scoped",
 				Optional:    true,
+				ForceNew:    true,
 			},
 			"strategy": {
 				Type:        schema.TypeString,
