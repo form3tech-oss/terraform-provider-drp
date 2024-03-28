@@ -27,7 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        tf_version: ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5"]
+        tf_version: ["1.4", "1.5", "1.6", "1.7"]
+      fail-fast: false
     needs: setup-drp
     steps:
       - name: Checkout
@@ -57,5 +58,6 @@ jobs:
           TF_ACC_LOG: trace
           LOG_LEVEL: debug
           RS_KEY: rocketskates:r0cketsk8ts
+          RS_DISABLE_DNS: true
         run: |
           go test -v ./drpv4 -cover -timeout 30m -count 1
