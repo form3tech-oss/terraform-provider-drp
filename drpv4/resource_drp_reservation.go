@@ -78,11 +78,6 @@ func resourceReservation() *schema.Resource {
 				Optional:    true,
 				Default:     "MAC",
 			},
-			"subnet": {
-				Type:        schema.TypeString,
-				Description: "Reservation subnet",
-				Optional:    true,
-			},
 			"token": {
 				Type:        schema.TypeString,
 				Description: "Reservation token",
@@ -140,7 +135,6 @@ func flattenReservation(d *schema.ResourceData, reservation *models.Reservation)
 
 	d.Set("scoped", reservation.Scoped)
 	d.Set("strategy", reservation.Strategy)
-	d.Set("subnet", reservation.Subnet)
 	d.Set("token", reservation.Token)
 
 	if reservation.Options != nil {
@@ -172,7 +166,6 @@ func expandReservation(d *schema.ResourceData) *models.Reservation {
 		Duration:      int32(d.Get("duration").(int)),
 		Scoped:        d.Get("scoped").(bool),
 		Strategy:      d.Get("strategy").(string),
-		Subnet:        d.Get("subnet").(string),
 		Token:         d.Get("token").(string),
 		Options:       expandReservationOptions(d.Get("options").([]interface{})),
 	}
