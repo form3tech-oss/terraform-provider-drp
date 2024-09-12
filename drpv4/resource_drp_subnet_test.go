@@ -13,6 +13,7 @@ func TestAccResourceSubnet(t *testing.T) {
 		PreCheck:  func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{
+				ResourceName: "drp_subnet.test",
 				Config: `
 					resource "drp_subnet" "test" {
 						name = "test"
@@ -32,6 +33,7 @@ func TestAccResourceSubnet(t *testing.T) {
 				ExpectNonEmptyPlan: true,
 			},
 			{
+				ResourceName: "drp_subnet.test",
 				Config: `
 					resource "drp_subnet" "test" {
 						name = "test"
@@ -68,6 +70,7 @@ func TestAccResourceSubnet(t *testing.T) {
 				ExpectNonEmptyPlan: true,
 			},
 			{
+				ResourceName: "drp_subnet.test",
 				Config: `
 					resource "drp_subnet" "test" {
 						name = "test1"
@@ -83,6 +86,34 @@ func TestAccResourceSubnet(t *testing.T) {
 				ExpectNonEmptyPlan: true,
 			},
 			{
+				ResourceName: "drp_subnet.test",
+				Config: `
+					resource "drp_subnet" "test" {
+						name = "test1"
+						description = "test subnet"
+						subnet = "192.168.0.0/24"
+						active_start = "192.168.0.1"
+						active_end = "192.168.0.255"
+					}
+				`,
+				ExpectError: regexp.MustCompile("Not Found"),
+				// PreConfig: func() {
+				// 	t.Log("Removing subnet using DRP API to test terraform error handling")
+				// 	client := testAccProvider.Meta().(*Config)
+				// 	r, err := client.session.ListModel("subnets")
+				// 	if err != nil {
+				// 		t.Fatal("failed to list subnets")
+				// 	}
+				// 	t.Logf("got response: %v", r)
+
+				// 	_, err = client.session.DeleteModel("subnets", "test1")
+				// 	if err != nil {
+				// 		t.Fatalf("failed to remove subnet using DRP API: %v", err)
+				// 	}
+				// },
+			},
+			{
+				ResourceName: "drp_subnet.test",
 				Config: `
 					resource "drp_subnet" "test" {
 						name = "test#"
@@ -93,23 +124,6 @@ func TestAccResourceSubnet(t *testing.T) {
 					}
 				`,
 				ExpectError: regexp.MustCompile("Invalid Name `test#`"),
-			},
-			{
-				Config: `
-					resource "drp_subnet" "test" {
-						name = "test1"
-						description = "test subnet"
-						subnet = "192.168.0.0/24"
-						active_start = "192.168.0.1"
-						active_end = "192.168.0.255"
-					}
-				`,
-				ExpectNonEmptyPlan: true,
-				ExpectError:        regexp.MustCompile("Not Found"),
-				PreConfig: func() {
-					client := testAccProvider.Meta().(*Config)
-					client.session.DeleteModel("subnets", "test1")
-				},
 			},
 		},
 	})
