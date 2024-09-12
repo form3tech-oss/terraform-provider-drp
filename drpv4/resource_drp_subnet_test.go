@@ -94,6 +94,23 @@ func TestAccResourceSubnet(t *testing.T) {
 				`,
 				ExpectError: regexp.MustCompile("Invalid Name `test#`"),
 			},
+			{
+				Config: `
+					resource "drp_subnet" "test" {
+						name = "test1"
+						description = "test subnet"
+						subnet = "192.168.0.0/24"
+						active_start = "192.168.0.1"
+						active_end = "192.168.0.255"
+					}
+				`,
+				ExpectNonEmptyPlan: true,
+				ExpectError:        regexp.MustCompile("Not Found"),
+				PreConfig: func() {
+					client := testAccProvider.Meta().(*Config)
+					client.session.DeleteModel("subnets", "test1")
+				},
+			},
 		},
 	})
 }
