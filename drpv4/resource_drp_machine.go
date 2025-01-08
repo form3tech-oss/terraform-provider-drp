@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/VictorLowther/jsonpatch2"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
 )
@@ -154,11 +155,18 @@ func resourceMachineAllocate(d *schema.ResourceData, m interface{}) error {
 		parms["pool/filter"] = filters.([]interface{})
 	}
 
+	patch := jsonpatch2.Patch{{Op: "replace", Path: "/Pool", Value: pool}}
+	reqm := cc.session.Req().Patch(patch).UrlFor("machines", d.Id())
+	mr := []*models.Machine{}
+	if err := reqm.Do(&mr); err != nil {
+		log.Printf("[DEBUG] POST error %+v | %+v", err, reqm)
+		return fmt.Errorf("error set pool %s: %s", pool, err)
+	}
 	pr := []*models.PoolResult{}
 	req := cc.session.Req().Post(parms).UrlFor("pools", pool, "allocateMachines")
 	if err := req.Do(&pr); err != nil {
 		log.Printf("[DEBUG] POST error %+v | %+v", err, req)
-		return fmt.Errorf("Error allocated from pool %s: %s", pool, err)
+		return fmt.Errorf("error allocated from pool %s: %s", pool, err)
 	}
 	mc := pr[0]
 	log.Printf("[DEBUG] Allocated %s machine %s (%s)", mc.Status, mc.Name, mc.Uuid)
