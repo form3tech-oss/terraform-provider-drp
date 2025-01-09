@@ -155,8 +155,14 @@ func resourceMachineAllocate(d *schema.ResourceData, m interface{}) error {
 		parms["pool/filter"] = filters.([]interface{})
 	}
 
+	requuid := cc.session.Req().Get().UrlFor("machines", "Address=", d.Get("address").(string))
+	mruuid := []*models.Machine{}
+	if err := requuid.Do(&mruuid); err != nil {
+		log.Printf("[DEBUG] Get error %+v | %+v", err, requuid)
+		return fmt.Errorf("error getting machine UUID for address %s: %s", d.Get("address").(string), err)
+	}
 	patch := jsonpatch2.Patch{{Op: "replace", Path: "/Pool", Value: pool}}
-	reqm := cc.session.Req().Patch(patch).UrlFor("machines", d.Id())
+	reqm := cc.session.Req().Patch(patch).UrlFor("machines", string(mruuid[0].Uuid))
 	mr := []*models.Machine{}
 	if err := reqm.Do(&mr); err != nil {
 		log.Printf("[DEBUG] POST error %+v | %+v", err, reqm)
