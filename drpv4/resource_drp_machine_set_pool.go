@@ -72,7 +72,7 @@ func resourceMachineSetPool(d *schema.ResourceData, m interface{}) error {
 		return fmt.Errorf("error getting machine UUID for address %s: %s", name, err)
 	}
 	patch := jsonpatch2.Patch{{Op: "replace", Path: "/Pool", Value: pool}}
-	reqm := cc.session.Req().Patch(patch).UrlFor("machines", string(mruuid[0].Uuid))
+	reqm := cc.session.Req().Patch(patch).UrlFor("machines", string(mruuid[0].Uuid.String()))
 	mr := []*models.Machine{}
 	if err := reqm.Do(&mr); err != nil {
 		log.Printf("[DEBUG] POST error %+v | %+v", err, reqm)
