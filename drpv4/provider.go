@@ -22,17 +22,18 @@ func Provider() *schema.Provider {
 	return &schema.Provider{
 
 		ResourcesMap: map[string]*schema.Resource{
-			"drp_machine":       resourceMachine(),
-			"drp_param":         resourceParam(),
-			"drp_template":      resourceTemplate(),
-			"drp_task":          resourceTask(),
-			"drp_stage":         resourceStage(),
-			"drp_workflow":      resourceWorkflow(),
-			"drp_subnet":        resourceSubnet(),
-			"drp_reservation":   resourceReservation(),
-			"drp_pool":          resourcePool(),
-			"drp_profile":       resourceProfile(),
-			"drp_profile_param": resourceProfileParam(),
+			"drp_machine":          resourceMachine(),
+			"drp_machine_set_pool": resourceMachinePool(),
+			"drp_param":            resourceParam(),
+			"drp_template":         resourceTemplate(),
+			"drp_task":             resourceTask(),
+			"drp_stage":            resourceStage(),
+			"drp_workflow":         resourceWorkflow(),
+			"drp_subnet":           resourceSubnet(),
+			"drp_reservation":      resourceReservation(),
+			"drp_pool":             resourcePool(),
+			"drp_profile":          resourceProfile(),
+			"drp_profile_param":    resourceProfileParam(),
 		},
 
 		// note yet, but potentially pools, params and profiles
