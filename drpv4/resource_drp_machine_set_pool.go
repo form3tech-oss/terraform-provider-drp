@@ -65,7 +65,7 @@ func resourceMachineSetPool(d *schema.ResourceData, m interface{}) error {
 	d.Set("pool", pool)
 	name := d.Get("name").(string)
 
-	requuid := cc.session.Req().Get().UrlFor("machines", fmt.Sprintf("Name=%s", name))
+	requuid := cc.session.Req().Get().UrlFor(fmt.Sprintf("machines?Name=%s", name))
 	mruuid := []*models.Machine{}
 	if err := requuid.Do(&mruuid); err != nil {
 		log.Printf("[DEBUG] Get error %+v | %+v", err, requuid)
