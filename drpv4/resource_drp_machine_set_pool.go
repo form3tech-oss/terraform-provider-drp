@@ -32,6 +32,7 @@ func resourceMachinePool() *schema.Resource {
 			"machineName": &schema.Schema{
 				Type:        schema.TypeString,
 				Description: "Machine Name",
+				Required:    true,
 				ForceNew:    true,
 			},
 
