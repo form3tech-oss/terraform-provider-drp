@@ -29,7 +29,7 @@ func resourceMachinePool() *schema.Resource {
 				Description: "Which pool to add machine to",
 				Optional:    true,
 			},
-			"machineName": &schema.Schema{
+			"name": &schema.Schema{
 				Type:        schema.TypeString,
 				Description: "Machine Name",
 				Required:    true,
@@ -63,7 +63,7 @@ func resourceMachineSetPool(d *schema.ResourceData, m interface{}) error {
 		pool = "default"
 	}
 	d.Set("pool", pool)
-	name := d.Get("machineName").(string)
+	name := d.Get("name").(string)
 
 	requuid := cc.session.Req().Get().UrlFor("machines", "Name=", name)
 	mruuid := []*models.Machine{}
