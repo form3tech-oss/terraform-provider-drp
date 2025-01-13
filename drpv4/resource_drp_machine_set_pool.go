@@ -67,11 +67,12 @@ func resourceMachineSetPool(d *schema.ResourceData, m interface{}) error {
 
 	requuid := cc.session.Req().Get().UrlFor(fmt.Sprintf("machines?Name=%s", name))
 	mruuid := []*models.Machine{}
+	log.Printf("[DEBUG] Getting machines URL is %s", requuid.Req.RequestURI)
 	if err := requuid.Do(&mruuid); err != nil {
 		log.Printf("[DEBUG] Get error %+v | %+v", err, requuid)
 		return fmt.Errorf("error getting machine UUID for address %s: %s", name, err)
 	}
-	log.Printf("[DEBUG] Got machine  %+v", requuid)
+	log.Printf("[DEBUG] Got machines %s %+v", mruuid[0].Uuid.String(), requuid.Req.RequestURI)
 	d.Set("address", mruuid[0].Address.String())
 	d.SetId(mruuid[0].Uuid.String())
 	if mruuid[0].Pool != pool {
