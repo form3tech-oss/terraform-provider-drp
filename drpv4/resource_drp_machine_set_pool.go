@@ -65,19 +65,18 @@ func resourceMachineSetPool(d *schema.ResourceData, m interface{}) error {
 	d.Set("pool", pool)
 	name := d.Get("name").(string)
 
-	requuid := cc.session.Req().Get().UrlFor(fmt.Sprintf("machines?Name=%s", name))
-	mruuid := []*models.Machine{}
-	log.Printf("[DEBUG] Getting machines URL is %s", requuid.Req.RequestURI)
-	if err := requuid.Do(&mruuid); err != nil {
-		log.Printf("[DEBUG] Get error %+v | %+v", err, requuid)
-		return fmt.Errorf("error getting machine UUID for address %s: %s", name, err)
+	mo, err := cc.session.GetModel("machines", "Name", name)
+	if err != nil {
+		log.Printf("[ERROR] [resourceMachineSetPool] Unable to get machine: %s", name)
+		return fmt.Errorf("unable to get machine %s", name)
 	}
-	log.Printf("[DEBUG] Got machines %s %+v", mruuid[0].Uuid.String(), requuid.Req.RequestURI)
-	d.Set("address", mruuid[0].Address.String())
-	d.SetId(mruuid[0].Uuid.String())
-	if mruuid[0].Pool != pool {
+	machineObject := mo.(*models.Machine)
+	log.Printf("[DEBUG] Got machines uuid: %s address: %s", machineObject.Uuid.String(), machineObject.Address.String())
+	d.Set("address", machineObject.Address.String())
+	d.SetId(machineObject.Uuid.String())
+	if machineObject.Pool != pool {
 		patch := jsonpatch2.Patch{{Op: "replace", Path: "/Pool", Value: pool}}
-		reqm := cc.session.Req().Patch(patch).UrlFor("machines", string(mruuid[0].Uuid.String()))
+		reqm := cc.session.Req().Patch(patch).UrlFor("machines", machineObject.Uuid.String())
 		mr := models.Machine{}
 		if err := reqm.Do(&mr); err != nil {
 			log.Printf("[DEBUG] POST error %+v | %+v", err, reqm)
@@ -96,7 +95,7 @@ func resourceMachineGetPool(d *schema.ResourceData, m interface{}) error {
 	mo, err := cc.session.GetModel("machines", uuid)
 	if err != nil {
 		log.Printf("[ERROR] [resourceMachineRead] Unable to get machine: %s", uuid)
-		return fmt.Errorf("Unable to get machine %s", uuid)
+		return fmt.Errorf("unable to get machine %s", uuid)
 	}
 	machineObject := mo.(*models.Machine)
 	d.Set("address", machineObject.Address.String())
