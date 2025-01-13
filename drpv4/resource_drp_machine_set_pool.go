@@ -71,8 +71,9 @@ func resourceMachineSetPool(d *schema.ResourceData, m interface{}) error {
 		log.Printf("[DEBUG] Get error %+v | %+v", err, requuid)
 		return fmt.Errorf("error getting machine UUID for address %s: %s", name, err)
 	}
-	d.Set("address", mruuid[0].Address)
-	d.SetId(string(mruuid[0].Uuid))
+	log.Printf("[DEBUG] Got machine  %+v", requuid)
+	d.Set("address", mruuid[0].Address.String())
+	d.SetId(mruuid[0].Uuid.String())
 	if mruuid[0].Pool != pool {
 		patch := jsonpatch2.Patch{{Op: "replace", Path: "/Pool", Value: pool}}
 		reqm := cc.session.Req().Patch(patch).UrlFor("machines", string(mruuid[0].Uuid.String()))
@@ -81,6 +82,7 @@ func resourceMachineSetPool(d *schema.ResourceData, m interface{}) error {
 			log.Printf("[DEBUG] POST error %+v | %+v", err, reqm)
 			return fmt.Errorf("error set pool %s: %s", pool, err)
 		}
+		log.Printf("[DEBUG] Did set pool  %+v | %+v", mr, reqm)
 	}
 	return resourceMachineGetPool(d, m)
 }
