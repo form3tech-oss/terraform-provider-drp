@@ -65,12 +65,12 @@ func resourceMachineSetPool(d *schema.ResourceData, m interface{}) error {
 	d.Set("pool", pool)
 	name := d.Get("name").(string)
 
-	mo, err := cc.session.GetModel("machines", "Name", name)
-	if err != nil {
+	mo, err := cc.session.ListModel("machines", "Name", name)
+	if err != nil || len(mo) != 1 {
 		log.Printf("[ERROR] [resourceMachineSetPool] Unable to get machine: %s", name)
 		return fmt.Errorf("unable to get machine %s", name)
 	}
-	machineObject := mo.(*models.Machine)
+	machineObject := mo[0].(*models.Machine)
 	log.Printf("[DEBUG] Got machines uuid: %s address: %s", machineObject.Uuid.String(), machineObject.Address.String())
 	d.Set("address", machineObject.Address.String())
 	d.SetId(machineObject.Uuid.String())
