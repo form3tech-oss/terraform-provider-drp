@@ -15,7 +15,7 @@ jobs:
         run: |
           curl -fsSL get.rebar.digital/stable | bash -s -- install --isolated --version=stable
       - name: Upload artifact
-        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: drp
           path: |
@@ -37,7 +37,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Download artifact
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
         with:
           name: drp
       - name: Set up Go
