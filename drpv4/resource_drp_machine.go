@@ -180,8 +180,13 @@ func resourceMachineRead(d *schema.ResourceData, m interface{}) error {
 	log.Printf("[DEBUG] Reading machine %s", uuid)
 	mo, err := cc.session.GetModel("machines", uuid)
 	if err != nil {
-		log.Printf("[ERROR] [resourceMachineRead] Unable to get machine: %s", uuid)
-		return fmt.Errorf("Unable to get machine %s", uuid)
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return nil
+		} else {
+			log.Printf("[ERROR] [resourceMachineRead] Unable to get machine: %s", uuid)
+			return fmt.Errorf("Unable to get machine %s", uuid)
+		}
 	}
 	machineObject := mo.(*models.Machine)
 

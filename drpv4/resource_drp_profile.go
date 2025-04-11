@@ -3,6 +3,7 @@ package drpv4
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -78,7 +79,12 @@ func resourceProfileRead(d *schema.ResourceData, m interface{}) error {
 
 	pr, err := c.session.GetModel("profiles", d.Id())
 	if err != nil {
-		return fmt.Errorf("error reading profile: %s", err)
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return flattenProfile(d, &models.Profile{})
+		} else {
+			return fmt.Errorf("error reading profile: %s", err)
+		}
 	}
 
 	return flattenProfile(d, pr.(*models.Profile))

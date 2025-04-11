@@ -3,6 +3,7 @@ package drpv4
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -310,7 +311,12 @@ func resourceTaskRead(d *schema.ResourceData, m interface{}) error {
 
 	to, err := c.session.GetModel("tasks", d.Id())
 	if err != nil {
-		return fmt.Errorf("error reading task: %s", err)
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return flattenTask(d, &models.Task{})
+		} else {
+			return fmt.Errorf("error reading task: %s", err)
+		}
 	}
 
 	return flattenTask(d, to.(*models.Task))
