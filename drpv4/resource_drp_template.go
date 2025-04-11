@@ -3,6 +3,7 @@ package drpv4
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -105,7 +106,12 @@ func resourceTemplateRead(d *schema.ResourceData, m interface{}) error {
 
 	to, err := c.session.GetModel("templates", d.Id())
 	if err != nil {
-		return fmt.Errorf("error reading template: %s", err)
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return nil
+		} else {
+			return fmt.Errorf("error reading template: %s", err)
+		}
 	}
 
 	templateObject := to.(*models.Template)
