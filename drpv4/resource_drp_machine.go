@@ -185,7 +185,7 @@ func resourceMachineRead(d *schema.ResourceData, m interface{}) error {
 			return nil
 		} else {
 			log.Printf("[ERROR] [resourceMachineRead] Unable to get machine: %s", uuid)
-			return fmt.Errorf("Unable to get machine %s", uuid)
+			return fmt.Errorf("unable to get machine %s", uuid)
 		}
 	}
 	machineObject := mo.(*models.Machine)

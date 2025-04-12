@@ -1,7 +1,9 @@
 package drpv4
 
 import (
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -51,11 +53,12 @@ func expandWorkflow(d *schema.ResourceData) *models.Workflow {
 }
 
 // flattenWorkflow flattens a DRP Workflow into a Terraform resource
-func flattenWorkflow(d *schema.ResourceData, workflow *models.Workflow) {
+func flattenWorkflow(d *schema.ResourceData, workflow *models.Workflow) error {
 	d.Set("name", workflow.Name)
 	d.Set("description", workflow.Description)
 	d.Set("documentation", workflow.Documentation)
 	d.Set("stages", workflow.Stages)
+	return nil
 }
 
 // resourceWorkflowCreate creates a new DRP Workflow
@@ -81,7 +84,12 @@ func resourceWorkflowRead(d *schema.ResourceData, m interface{}) error {
 
 	res, err := c.session.GetModel("workflows", d.Id())
 	if err != nil {
-		return err
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return flattenWorkflow(d, &models.Workflow{})
+		} else {
+			return fmt.Errorf("error reading param: %s", err)
+		}
 	}
 
 	workflow := res.(*models.Workflow)
