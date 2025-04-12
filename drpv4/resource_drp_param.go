@@ -3,6 +3,7 @@ package drpv4
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -134,7 +135,12 @@ func resourceParamRead(d *schema.ResourceData, m interface{}) error {
 
 	po, err := c.session.GetModel("params", d.Id())
 	if err != nil {
-		return fmt.Errorf("error reading param: %s", err)
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return flattenParam(d, &models.Param{})
+		} else {
+			return fmt.Errorf("error reading param: %s", err)
+		}
 	}
 
 	return flattenParam(d, po.(*models.Param))

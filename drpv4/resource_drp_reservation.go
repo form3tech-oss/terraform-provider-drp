@@ -1,8 +1,10 @@
 package drpv4
 
 import (
+	"fmt"
 	"log"
 	"net"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -123,7 +125,7 @@ func flattenReservationOptions(options []models.DhcpOption) []interface{} {
 }
 
 // flattenReservation flattens a reservation object
-func flattenReservation(d *schema.ResourceData, reservation *models.Reservation) {
+func flattenReservation(d *schema.ResourceData, reservation *models.Reservation) error {
 	d.Set("description", reservation.Description)
 	d.Set("documentation", reservation.Documentation)
 	d.Set("address", reservation.Addr.String())
@@ -140,6 +142,7 @@ func flattenReservation(d *schema.ResourceData, reservation *models.Reservation)
 	if reservation.Options != nil {
 		d.Set("options", flattenReservationOptions(reservation.Options))
 	}
+	return nil
 }
 
 // expandReservationOptions expands the options list
@@ -202,7 +205,12 @@ func resourceReservationRead(d *schema.ResourceData, m interface{}) error {
 
 	res, err := c.session.GetModel("reservations", d.Id())
 	if err != nil {
-		return err
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return flattenReservation(d, &models.Reservation{})
+		} else {
+			return fmt.Errorf("error reading param: %s", err)
+		}
 	}
 
 	reservation := res.(*models.Reservation)
