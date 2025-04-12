@@ -3,6 +3,7 @@ package drpv4
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -243,7 +244,12 @@ func resourceStageRead(d *schema.ResourceData, m interface{}) error {
 
 	res, err := c.session.GetModel("stages", d.Id())
 	if err != nil {
-		return err
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return flattenStage(d, &models.Stage{})
+		} else {
+			return fmt.Errorf("error reading stage: %s", err)
+		}
 	}
 
 	log.Printf("[DEBUG] Stage read: %#v", res)
