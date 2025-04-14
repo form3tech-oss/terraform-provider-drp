@@ -95,11 +95,11 @@ func resourceMachineGetPool(d *schema.ResourceData, m interface{}) error {
 	log.Printf("[DEBUG] Reading machine %s", uuid)
 	mo, err := cc.session.GetModel("machines", uuid)
 	if err != nil {
-		if strings.HasSuffix(err.Error(), "Not Found") {
+		if strings.HasSuffix(err.Error(), "Unable to get machine") {
 			d.SetId("")
 			return nil
 		} else {
-			return fmt.Errorf("error reading param: %s", err)
+			return fmt.Errorf("error reading machine set pool: %s", err)
 		}
 	}
 	machineObject := mo.(*models.Machine)
