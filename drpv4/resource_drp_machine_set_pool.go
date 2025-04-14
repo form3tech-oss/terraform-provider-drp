@@ -95,7 +95,7 @@ func resourceMachineGetPool(d *schema.ResourceData, m interface{}) error {
 	log.Printf("[DEBUG] Reading machine %s", uuid)
 	mo, err := cc.session.GetModel("machines", uuid)
 	if err != nil {
-		if strings.HasSuffix(err.Error(), "Unable to get machine") {
+		if strings.HasSuffix(err.Error(), "Unable to get machine") || strings.HasSuffix(err.Error(), "Not Found") {
 			d.SetId("")
 			return nil
 		} else {
