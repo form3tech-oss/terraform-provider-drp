@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -197,7 +198,12 @@ func resourceProfileParamRead(d *schema.ResourceData, m interface{}) error {
 
 	var p interface{}
 	if err := c.session.Req().UrlFor("profiles", profile, "params", name).Do(&p); err != nil {
-		return err
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return nil
+		} else {
+			return err
+		}
 	}
 
 	d.Set("name", name)

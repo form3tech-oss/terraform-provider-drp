@@ -3,6 +3,7 @@ package drpv4
 import (
 	"log"
 	"net"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -264,7 +265,13 @@ func resourceSubnetRead(d *schema.ResourceData, m interface{}) error {
 
 	res, err := c.session.GetModel("subnets", d.Id())
 	if err != nil {
-		return err
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			flattenSubnet(d, &models.Subnet{})
+			return nil
+		} else {
+			return err
+		}
 	}
 
 	subnet := res.(*models.Subnet)

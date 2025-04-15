@@ -7,6 +7,7 @@ package drpv4
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/VictorLowther/jsonpatch2"
@@ -94,8 +95,12 @@ func resourceMachineGetPool(d *schema.ResourceData, m interface{}) error {
 	log.Printf("[DEBUG] Reading machine %s", uuid)
 	mo, err := cc.session.GetModel("machines", uuid)
 	if err != nil {
-		log.Printf("[ERROR] [resourceMachineRead] Unable to get machine: %s", uuid)
-		return fmt.Errorf("unable to get machine %s", uuid)
+		if strings.HasSuffix(err.Error(), "Unable to get machine") || strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return nil
+		} else {
+			return fmt.Errorf("error reading machine set pool: %s", err)
+		}
 	}
 	machineObject := mo.(*models.Machine)
 	d.Set("address", machineObject.Address.String())

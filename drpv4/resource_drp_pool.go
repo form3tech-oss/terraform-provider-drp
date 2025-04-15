@@ -1,7 +1,9 @@
 package drpv4
 
 import (
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/rackn/provision/v4/models"
@@ -365,7 +367,12 @@ func resourcePoolRead(d *schema.ResourceData, m interface{}) error {
 
 	pool, err := c.session.GetModel("pools", d.Id())
 	if err != nil {
-		return err
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			d.SetId("")
+			return flattenPool(d, &models.Pool{})
+		} else {
+			return fmt.Errorf("error reading pool: %s", err)
+		}
 	}
 
 	return flattenPool(d, pool.(*models.Pool))
