@@ -130,14 +130,13 @@ func resourceMachineSetPoolDelete(d *schema.ResourceData, m interface{}) error {
 
 	patch := jsonpatch2.Patch{{Op: "replace", Path: "/Pool", Value: "default"}}
 	reqm := cc.session.Req().Patch(patch).UrlFor("machines", uuid)
-	mr := []*models.Machine{}
+	mr := models.Machine{}
 	if err := reqm.Do(&mr); err != nil {
 		log.Printf("[DEBUG] POST error %+v | %+v", err, reqm)
 		return fmt.Errorf("error set pool %s: %s", "default", err)
 	}
 
-	mc := mr[0]
-	if mc.Pool == "default" {
+	if mr.Pool == "default" {
 		d.SetId("")
 		return nil
 	} else {
