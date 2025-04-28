@@ -136,8 +136,7 @@ func resourceMachineSetPoolDelete(d *schema.ResourceData, m interface{}) error {
 		return fmt.Errorf("error set pool %s: %s", "default", err)
 	}
 
-	mc := mr[0]
-	if mc.Pool == "default" {
+	if mr.Pool == "default" {
 		d.SetId("")
 		return nil
 	} else {
