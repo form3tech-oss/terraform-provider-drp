@@ -295,6 +295,7 @@ func expandPoolActions(c *Config, actions []interface{}) *models.PoolTransitionA
 	a := actions[0].(map[string]interface{})
 
 	action := &models.PoolTransitionActions{
+		AddParameters:    map[string]interface{}{},
 		AddProfiles:      expandStringList(a["add_profiles"]),
 		RemoveParameters: expandStringList(a["remove_parameters"]),
 		RemoveProfiles:   expandStringList(a["remove_profiles"]),
@@ -302,7 +303,10 @@ func expandPoolActions(c *Config, actions []interface{}) *models.PoolTransitionA
 	}
 
 	for k, v := range a["add_parameters"].(map[string]interface{}) {
-		value, _ := convertParamToType(c, k, v.(string))
+		value, err := convertParamToType(c, k, v.(string))
+		if err != nil {
+			panic(err)
+		}
 		action.AddParameters[k] = value
 	}
 
