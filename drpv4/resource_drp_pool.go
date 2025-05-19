@@ -287,7 +287,7 @@ func flattenPool(d *schema.ResourceData, pool *models.Pool) error {
 }
 
 // expandPoolActions expands a PoolTransictionActions from a map.
-func expandPoolActions(actions []interface{}) *models.PoolTransitionActions {
+func expandPoolActions(c *Config, actions []interface{}) *models.PoolTransitionActions {
 	if len(actions) == 0 {
 		return nil
 	}
@@ -295,11 +295,15 @@ func expandPoolActions(actions []interface{}) *models.PoolTransitionActions {
 	a := actions[0].(map[string]interface{})
 
 	action := &models.PoolTransitionActions{
-		AddParameters:    a["add_parameters"].(map[string]interface{}),
 		AddProfiles:      expandStringList(a["add_profiles"]),
 		RemoveParameters: expandStringList(a["remove_parameters"]),
 		RemoveProfiles:   expandStringList(a["remove_profiles"]),
 		Workflow:         a["workflow"].(string),
+	}
+
+	for k, v := range a["add_parameters"].(map[string]interface{}) {
+		value, _ := convertParamToType(c, k, v.(string))
+		action.AddParameters[k] = value
 	}
 
 	return action
@@ -326,16 +330,16 @@ func expandPoolAutofill(autofill []interface{}) *models.PoolAutoFill {
 }
 
 // expandPool expands the pool object.
-func expandPool(d *schema.ResourceData) *models.Pool {
+func expandPool(c *Config, d *schema.ResourceData) *models.Pool {
 	pool := &models.Pool{
 		Id:              d.Get("pool_id").(string),
 		Description:     d.Get("description").(string),
 		Documentation:   d.Get("documentation").(string),
 		ParentPool:      d.Get("parent_pool").(string),
-		AllocateActions: expandPoolActions(d.Get("allocate_actions").([]interface{})),
-		ReleaseActions:  expandPoolActions(d.Get("release_actions").([]interface{})),
-		EnterActions:    expandPoolActions(d.Get("enter_actions").([]interface{})),
-		ExitActions:     expandPoolActions(d.Get("exit_actions").([]interface{})),
+		AllocateActions: expandPoolActions(c, d.Get("allocate_actions").([]interface{})),
+		ReleaseActions:  expandPoolActions(c, d.Get("release_actions").([]interface{})),
+		EnterActions:    expandPoolActions(c, d.Get("enter_actions").([]interface{})),
+		ExitActions:     expandPoolActions(c, d.Get("exit_actions").([]interface{})),
 		AutoFill:        expandPoolAutofill(d.Get("autofill").([]interface{})),
 	}
 
@@ -348,7 +352,7 @@ func resourcePoolCreate(d *schema.ResourceData, m interface{}) error {
 
 	log.Printf("[DEBUG] Creating Pool: %s", d.Get("pool_id").(string))
 
-	pool := expandPool(d)
+	pool := expandPool(c, d)
 
 	if err := c.session.CreateModel(pool); err != nil {
 		return err
@@ -384,7 +388,7 @@ func resourcePoolUpdate(d *schema.ResourceData, m interface{}) error {
 
 	log.Printf("[DEBUG] Updating Pool: %s", d.Id())
 
-	pool := expandPool(d)
+	pool := expandPool(c, d)
 
 	if err := c.session.PutModel(pool); err != nil {
 		return err
