@@ -208,6 +208,48 @@ func TestAccResourcePool(t *testing.T) {
 				),
 				ExpectNonEmptyPlan: false,
 			},
+			{
+				Config: fmt.Sprintf(`
+					resource "drp_param" "test-param" {
+						name   = "%s-test"
+  						secure = false
+  						schema = {
+    						type = "boolean"
+  						}
+					}
+
+					resource "drp_pool" "test-param" {
+						pool_id = "%s-param"
+						description = "test pool"
+						documentation = "test pool"
+
+						allocate_actions {
+							workflow = "universal-hardware"
+							add_parameters = {
+								"universal/application" = "image-deploy"
+								"%s-test" = true
+							}
+						}
+
+						release_actions {
+							workflow = "universal-discover"
+							add_parameters = {
+								"universal/application" = "discover"
+								"%s-test" = false
+							}
+						}
+					}
+				`, testPoolRandomName, testPoolRandomName, testPoolRandomName, testPoolRandomName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.#", "1"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.0.add_parameters.%", "2"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", fmt.Sprintf(`allocate_actions.0.add_parameters.%s-test`, testPoolRandomName), "true"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", "release_actions.#", "1"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", "release_actions.0.add_parameters.%", "2"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", fmt.Sprintf(`release_actions.0.add_parameters.%s-test`, testPoolRandomName), "false"),
+				),
+				ExpectNonEmptyPlan: false,
+			},
 		},
 	})
 }

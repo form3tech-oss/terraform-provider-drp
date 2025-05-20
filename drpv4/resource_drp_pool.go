@@ -223,12 +223,24 @@ func flattenPoolActions(actions *models.PoolTransitionActions) []map[string]inte
 
 	m := make([]map[string]interface{}, 1)
 	m[0] = map[string]interface{}{
-		"add_parameters":    actions.AddParameters,
+		"add_parameters":    map[string]interface{}{},
 		"add_profiles":      actions.AddProfiles,
 		"remove_parameters": actions.RemoveParameters,
 		"remove_profiles":   actions.RemoveProfiles,
 		"workflow":          actions.Workflow,
 	}
+
+	addParams := m[0]["add_parameters"].(map[string]interface{})
+
+	for k, v := range actions.AddParameters {
+		param, err := convertParamToString(v)
+		if err != nil {
+			panic(err)
+		}
+
+		addParams[k] = param
+	}
+
 	return m
 }
 
