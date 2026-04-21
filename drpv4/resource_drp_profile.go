@@ -29,6 +29,14 @@ func resourceProfile() *schema.Resource {
 				Optional:    true,
 				Sensitive:   false,
 			},
+			"meta": {
+				Type:        schema.TypeMap,
+				Description: "Profile metadata (arbitrary string key/value pairs, e.g. UX-related flags)",
+				Optional:    true,
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
+			},
 		},
 	}
 
@@ -44,6 +52,10 @@ func flattenProfile(d *schema.ResourceData, profile *models.Profile) error {
 		return fmt.Errorf("error setting description: %s", err)
 	}
 
+	if err := d.Set("meta", profile.Meta); err != nil {
+		return fmt.Errorf("error setting meta: %s", err)
+	}
+
 	return nil
 }
 
@@ -51,6 +63,10 @@ func expandProfile(d *schema.ResourceData) *models.Profile {
 	profile := &models.Profile{
 		Name:        d.Get("name").(string),
 		Description: d.Get("description").(string),
+	}
+
+	if v, ok := d.GetOk("meta"); ok {
+		profile.Meta = models.Meta(expandMapInterface(v))
 	}
 
 	return profile
