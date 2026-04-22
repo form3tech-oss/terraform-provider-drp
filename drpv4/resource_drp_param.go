@@ -106,8 +106,8 @@ func (r *paramResource) expandParam(ctx context.Context, m *paramResourceModel, 
 
 func (r *paramResource) flattenParam(ctx context.Context, p *models.Param, m *paramResourceModel, diags *diag.Diagnostics) {
 	m.Name = types.StringValue(p.Name)
-	m.Description = types.StringValue(p.Description)
-	m.Documentation = types.StringValue(p.Documentation)
+	m.Description = mergeOptString(m.Description, p.Description)
+	m.Documentation = mergeOptString(m.Documentation, p.Documentation)
 	var sm map[string]string
 	var err error
 	if p.Schema != nil {
@@ -119,14 +119,15 @@ func (r *paramResource) flattenParam(ctx context.Context, p *models.Param, m *pa
 			}
 		}
 	}
-	if len(sm) == 0 {
+	if sm == nil {
+		sm = map[string]string{}
+	}
+	if m.Schema.IsNull() || m.Schema.IsUnknown() {
 		m.Schema = types.MapNull(types.StringType)
 	} else {
-		mv, d := types.MapValueFrom(ctx, types.StringType, sm)
-		diags.Append(d...)
-		m.Schema = mv
+		m.Schema = mergeOptStringMap(ctx, m.Schema, sm, diags)
 	}
-	m.Secure = types.BoolValue(p.Secure)
+	m.Secure = mergeOptBool(m.Secure, p.Secure)
 }
 
 func (r *paramResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -146,7 +147,12 @@ func (r *paramResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Create param failed", err.Error())
 		return
 	}
-	r.flattenParam(ctx, param, &plan, &resp.Diagnostics)
+	got, err := r.client.session.GetModel("params", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read param after create failed", err.Error())
+		return
+	}
+	r.flattenParam(ctx, got.(*models.Param), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -189,7 +195,12 @@ func (r *paramResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Update param failed", err.Error())
 		return
 	}
-	r.flattenParam(ctx, param, &plan, &resp.Diagnostics)
+	got, err := r.client.session.GetModel("params", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read param after update failed", err.Error())
+		return
+	}
+	r.flattenParam(ctx, got.(*models.Param), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

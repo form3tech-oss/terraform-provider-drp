@@ -81,6 +81,7 @@ func (r *stageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Description: "Required params.",
 			},
 			"runner_wait": schema.BoolAttribute{
+				Optional:            true,
 				Computed:            true,
 				Description:         "Runner wait (from DRP).",
 				MarkdownDescription: "Runner wait (from DRP).",
@@ -198,60 +199,75 @@ func (r *stageResource) expandStage(ctx context.Context, m *stageResourceModel, 
 	}
 }
 
-func (r *stageResource) flattenStage(ctx context.Context, s *models.Stage, m *stageResourceModel, diags *diag.Diagnostics) {
-	m.Name = types.StringValue(s.Name)
-	m.Description = types.StringValue(s.Description)
-	m.Documentation = types.StringValue(s.Documentation)
-	m.BootEnv = types.StringValue(s.BootEnv)
-	m.OptionalParams = mustListStrings(ctx, s.OptionalParams, diags)
-	m.Profiles = mustListStrings(ctx, s.Profiles, diags)
-	m.Reboot = types.BoolValue(s.Reboot)
-	m.RequiredParams = mustListStrings(ctx, s.RequiredParams, diags)
-	m.RunnerWait = types.BoolValue(s.RunnerWait)
-	m.Tasks = mustListStrings(ctx, s.Tasks, diags)
-
-	if s.Params != nil {
-		sm, err := interfaceMapToStringMap(s.Params)
-		if err != nil {
-			diags.AddError("Invalid stage params", err.Error())
-			return
+func (r *stageResource) flattenStageTemplatesMerged(ctx context.Context, prior types.List, api []models.TemplateInfo, diags *diag.Diagnostics) types.List {
+	if len(api) == 0 {
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.ListNull(stageTemplateObjType())
 		}
-		mv, d := types.MapValueFrom(ctx, types.StringType, sm)
-		diags.Append(d...)
-		m.Params = mv
-	} else {
-		m.Params = types.MapNull(types.StringType)
+		return types.ListNull(stageTemplateObjType())
 	}
-
-	tplObjs := make([]types.Object, 0, len(s.Templates))
-	for _, ti := range s.Templates {
+	var priorObjs []types.Object
+	if !prior.IsNull() && !prior.IsUnknown() {
+		for _, el := range prior.Elements() {
+			if o, ok := el.(types.Object); ok {
+				priorObjs = append(priorObjs, o)
+			}
+		}
+	}
+	tplObjs := make([]types.Object, 0, len(api))
+	for i, ti := range api {
+		pObj := types.ObjectNull(stageTemplateObjType().AttrTypes)
+		if i < len(priorObjs) {
+			pObj = priorObjs[i]
+		}
 		meta := ti.Meta
 		if meta == nil {
 			meta = map[string]string{}
 		}
-		metaVal, d := types.MapValueFrom(ctx, types.StringType, meta)
-		diags.Append(d...)
+		metaVal := mergeOptStringMap(ctx, priorObjMap(pObj, "meta"), meta, diags)
 		attrs := map[string]attr.Value{
 			"name":        types.StringValue(ti.Name),
-			"contents":    types.StringValue(ti.Contents),
-			"path":        types.StringValue(ti.Path),
-			"template_id": types.StringValue(ti.ID),
-			"link":        types.StringValue(ti.Link),
+			"contents":    mergeOptString(priorObjString(pObj, "contents"), ti.Contents),
+			"path":        mergeOptString(priorObjString(pObj, "path"), ti.Path),
+			"template_id": mergeOptString(priorObjString(pObj, "template_id"), ti.ID),
+			"link":        mergeOptString(priorObjString(pObj, "link"), ti.Link),
 			"meta":        metaVal,
 		}
 		obj, d := types.ObjectValue(stageTemplateObjType().AttrTypes, attrs)
 		diags.Append(d...)
 		tplObjs = append(tplObjs, obj)
 	}
-	if len(tplObjs) == 0 {
-		m.Template = types.ListNull(stageTemplateObjType())
-	} else {
-		elems := make([]attr.Value, len(tplObjs))
-		for i, o := range tplObjs {
-			elems[i] = o
-		}
-		m.Template = types.ListValueMust(stageTemplateObjType(), elems)
+	elems := make([]attr.Value, len(tplObjs))
+	for i, o := range tplObjs {
+		elems[i] = o
 	}
+	return types.ListValueMust(stageTemplateObjType(), elems)
+}
+
+func (r *stageResource) flattenStage(ctx context.Context, s *models.Stage, m *stageResourceModel, diags *diag.Diagnostics) {
+	m.Name = types.StringValue(s.Name)
+	m.Description = mergeOptString(m.Description, s.Description)
+	m.Documentation = mergeOptString(m.Documentation, s.Documentation)
+	m.BootEnv = mergeOptString(m.BootEnv, s.BootEnv)
+	m.OptionalParams = mergeOptStringList(ctx, m.OptionalParams, s.OptionalParams, diags)
+	m.Profiles = mergeOptStringList(ctx, m.Profiles, s.Profiles, diags)
+	m.Reboot = mergeOptBool(m.Reboot, s.Reboot)
+	m.RequiredParams = mergeOptStringList(ctx, m.RequiredParams, s.RequiredParams, diags)
+	m.RunnerWait = mergeOptBool(m.RunnerWait, s.RunnerWait)
+	m.Tasks = mergeOptStringList(ctx, m.Tasks, s.Tasks, diags)
+
+	var sm map[string]string
+	if s.Params != nil {
+		var err error
+		sm, err = interfaceMapToStringMap(s.Params)
+		if err != nil {
+			diags.AddError("Invalid stage params", err.Error())
+			return
+		}
+	}
+	m.Params = mergeOptStringMap(ctx, m.Params, sm, diags)
+
+	m.Template = r.flattenStageTemplatesMerged(ctx, m.Template, s.Templates, diags)
 }
 
 func (r *stageResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

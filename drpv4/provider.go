@@ -10,12 +10,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -73,9 +71,6 @@ func (p *fwProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 				Optional:            true,
 				Description:         "The DRP server URL, for example https://1.2.3.4:8092",
 				MarkdownDescription: "The DRP server URL, for example https://1.2.3.4:8092",
-				Validators: []validator.String{
-					stringvalidator.LengthAtLeast(1),
-				},
 			},
 		},
 	}
@@ -155,21 +150,8 @@ func (p *fwProvider) Configure(ctx context.Context, req provider.ConfigureReques
 		resp.Diagnostics.AddError("Failed to Connect", fmt.Sprintf("Failed to fetch info for %s", cfg.endpoint))
 		return
 	}
-	hasPool := false
-	for _, f := range info.Features {
-		if f == "embedded-pool" {
-			hasPool = true
-		}
-	}
-	if !hasPool {
-		resp.Diagnostics.AddError(
-			"Insufficient DRP Version",
-			fmt.Sprintf("Pooling feature required. Upgrade to v4.4 from %s", info.Version),
-		)
-		return
-	}
 
-	tflog.Info(ctx, fmt.Sprintf("Digital Rebar %v", info.Version))
+	tflog.Info(ctx, fmt.Sprintf("Digital Rebar %v (features: %v)", info.Version, info.Features))
 	resp.ResourceData = cfg
 }
 

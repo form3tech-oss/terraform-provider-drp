@@ -85,6 +85,13 @@ func (r *workflowResource) expandWorkflow(ctx context.Context, m *workflowResour
 	}
 }
 
+func (r *workflowResource) flattenWorkflow(ctx context.Context, wf *models.Workflow, m *workflowResourceModel, diags *diag.Diagnostics) {
+	m.Name = types.StringValue(wf.Name)
+	m.Description = mergeOptString(m.Description, wf.Description)
+	m.Documentation = mergeOptString(m.Documentation, wf.Documentation)
+	m.Stages = mergeOptStringList(ctx, m.Stages, wf.Stages, diags)
+}
+
 func (r *workflowResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if r.client == nil {
 		return
@@ -102,6 +109,12 @@ func (r *workflowResource) Create(ctx context.Context, req resource.CreateReques
 		resp.Diagnostics.AddError("Create workflow failed", err.Error())
 		return
 	}
+	got, err := r.client.session.GetModel("workflows", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read workflow after create failed", err.Error())
+		return
+	}
+	r.flattenWorkflow(ctx, got.(*models.Workflow), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -123,13 +136,7 @@ func (r *workflowResource) Read(ctx context.Context, req resource.ReadRequest, r
 		resp.Diagnostics.AddError("Read workflow failed", err.Error())
 		return
 	}
-	wf := res.(*models.Workflow)
-	state.Name = types.StringValue(wf.Name)
-	state.Description = types.StringValue(wf.Description)
-	state.Documentation = types.StringValue(wf.Documentation)
-	stages, d := types.ListValueFrom(ctx, types.StringType, wf.Stages)
-	resp.Diagnostics.Append(d...)
-	state.Stages = stages
+	r.flattenWorkflow(ctx, res.(*models.Workflow), &state, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -150,6 +157,12 @@ func (r *workflowResource) Update(ctx context.Context, req resource.UpdateReques
 		resp.Diagnostics.AddError("Update workflow failed", err.Error())
 		return
 	}
+	got, err := r.client.session.GetModel("workflows", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read workflow after update failed", err.Error())
+		return
+	}
+	r.flattenWorkflow(ctx, got.(*models.Workflow), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

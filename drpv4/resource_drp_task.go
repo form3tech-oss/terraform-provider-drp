@@ -220,73 +220,97 @@ func (r *taskResource) expandClaims(ctx context.Context, l types.List, diags *di
 	return out
 }
 
-func (r *taskResource) flattenTask(ctx context.Context, task *models.Task, m *taskResourceModel, diags *diag.Diagnostics) {
-	m.Name = types.StringValue(task.Name)
-	m.Description = types.StringValue(task.Description)
-	m.RequiredParams = mustListStrings(ctx, task.RequiredParams, diags)
-	m.OptionalParams = mustListStrings(ctx, task.OptionalParams, diags)
-	m.ExtraRoles = mustListStrings(ctx, task.ExtraRoles, diags)
-	m.Prerequisites = mustListStrings(ctx, task.Prerequisites, diags)
-
-	tplObjs := make([]types.Object, 0, len(task.Templates))
-	for _, ti := range task.Templates {
+func (r *taskResource) flattenTaskTemplatesMerged(ctx context.Context, prior types.List, api []models.TemplateInfo, diags *diag.Diagnostics) types.List {
+	if len(api) == 0 {
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.ListNull(templateInfoType())
+		}
+		return types.ListNull(templateInfoType())
+	}
+	var priorObjs []types.Object
+	if !prior.IsNull() && !prior.IsUnknown() {
+		for _, el := range prior.Elements() {
+			if o, ok := el.(types.Object); ok {
+				priorObjs = append(priorObjs, o)
+			}
+		}
+	}
+	tplObjs := make([]types.Object, 0, len(api))
+	for i, ti := range api {
+		var pObj types.Object
+		if i < len(priorObjs) {
+			pObj = priorObjs[i]
+		}
 		meta := ti.Meta
 		if meta == nil {
 			meta = map[string]string{}
 		}
-		metaVal, d := types.MapValueFrom(ctx, types.StringType, meta)
-		diags.Append(d...)
+		metaVal := mergeOptStringMap(ctx, priorObjMap(pObj, "meta"), meta, diags)
 		attrs := map[string]attr.Value{
-			"template_id": types.StringValue(ti.ID),
+			"template_id": mergeOptString(priorObjString(pObj, "template_id"), ti.ID),
 			"name":        types.StringValue(ti.Name),
-			"path":        types.StringValue(ti.Path),
-			"contents":    types.StringValue(ti.Contents),
-			"link":        types.StringValue(ti.Link),
+			"path":        mergeOptString(priorObjString(pObj, "path"), ti.Path),
+			"contents":    mergeOptString(priorObjString(pObj, "contents"), ti.Contents),
+			"link":        mergeOptString(priorObjString(pObj, "link"), ti.Link),
 			"meta":        metaVal,
 		}
 		obj, d := types.ObjectValue(templateInfoType().AttrTypes, attrs)
 		diags.Append(d...)
 		tplObjs = append(tplObjs, obj)
 	}
-	if len(tplObjs) == 0 {
-		m.Templates = types.ListNull(templateInfoType())
-	} else {
-		elems := make([]attr.Value, len(tplObjs))
-		for i, o := range tplObjs {
-			elems[i] = o
-		}
-		m.Templates = types.ListValueMust(templateInfoType(), elems)
+	elems := make([]attr.Value, len(tplObjs))
+	for i, o := range tplObjs {
+		elems[i] = o
 	}
+	return types.ListValueMust(templateInfoType(), elems)
+}
 
-	claimObjs := make([]types.Object, 0, len(task.ExtraClaims))
-	for _, c := range task.ExtraClaims {
+func (r *taskResource) flattenTaskClaimsMerged(ctx context.Context, prior types.List, api []*models.Claim, diags *diag.Diagnostics) types.List {
+	if len(api) == 0 {
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.ListNull(claimType())
+		}
+		return types.ListNull(claimType())
+	}
+	var priorObjs []types.Object
+	if !prior.IsNull() && !prior.IsUnknown() {
+		for _, el := range prior.Elements() {
+			if o, ok := el.(types.Object); ok {
+				priorObjs = append(priorObjs, o)
+			}
+		}
+	}
+	claimObjs := make([]types.Object, 0, len(api))
+	for i, c := range api {
+		var pObj types.Object
+		if i < len(priorObjs) {
+			pObj = priorObjs[i]
+		}
 		attrs := map[string]attr.Value{
-			"scope":    types.StringValue(c.Scope),
-			"action":   types.StringValue(c.Action),
-			"specific": types.StringValue(c.Specific),
+			"scope":    mergeOptString(priorObjString(pObj, "scope"), c.Scope),
+			"action":   mergeOptString(priorObjString(pObj, "action"), c.Action),
+			"specific": mergeOptString(priorObjString(pObj, "specific"), c.Specific),
 		}
 		obj, d := types.ObjectValue(claimType().AttrTypes, attrs)
 		diags.Append(d...)
 		claimObjs = append(claimObjs, obj)
 	}
-	if len(claimObjs) == 0 {
-		m.ExtraClaims = types.ListNull(claimType())
-	} else {
-		elems := make([]attr.Value, len(claimObjs))
-		for i, o := range claimObjs {
-			elems[i] = o
-		}
-		m.ExtraClaims = types.ListValueMust(claimType(), elems)
+	elems := make([]attr.Value, len(claimObjs))
+	for i, o := range claimObjs {
+		elems[i] = o
 	}
+	return types.ListValueMust(claimType(), elems)
 }
 
-func mustListStrings(ctx context.Context, items []string, diags *diag.Diagnostics) types.List {
-	if len(items) == 0 {
-		return types.ListNull(types.StringType)
-	}
-	v, d := types.ListValueFrom(ctx, types.StringType, items)
-	diags.Append(d...)
-	return v
+func (r *taskResource) flattenTask(ctx context.Context, task *models.Task, m *taskResourceModel, diags *diag.Diagnostics) {
+	m.Name = types.StringValue(task.Name)
+	m.Description = mergeOptString(m.Description, task.Description)
+	m.RequiredParams = mergeOptStringList(ctx, m.RequiredParams, task.RequiredParams, diags)
+	m.OptionalParams = mergeOptStringList(ctx, m.OptionalParams, task.OptionalParams, diags)
+	m.ExtraRoles = mergeOptStringList(ctx, m.ExtraRoles, task.ExtraRoles, diags)
+	m.Prerequisites = mergeOptStringList(ctx, m.Prerequisites, task.Prerequisites, diags)
+	m.Templates = r.flattenTaskTemplatesMerged(ctx, m.Templates, task.Templates, diags)
+	m.ExtraClaims = r.flattenTaskClaimsMerged(ctx, m.ExtraClaims, task.ExtraClaims, diags)
 }
 
 func (r *taskResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -306,7 +330,12 @@ func (r *taskResource) Create(ctx context.Context, req resource.CreateRequest, r
 		resp.Diagnostics.AddError("Create task failed", err.Error())
 		return
 	}
-	r.flattenTask(ctx, task, &plan, &resp.Diagnostics)
+	to, err := r.client.session.GetModel("tasks", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read task after create failed", err.Error())
+		return
+	}
+	r.flattenTask(ctx, to.(*models.Task), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
