@@ -5,141 +5,193 @@ package drpv4
  */
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"strings"
-	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-func resourceMachine() *schema.Resource {
-	r := &schema.Resource{
-		Create: resourceMachineAllocate,
-		Read:   resourceMachineRead,
-		Update: resourceMachineUpdate,
-		Delete: resourceMachineRelease,
+var _ resource.Resource = (*machineResource)(nil)
 
-		Schema: map[string]*schema.Schema{
-
-			"pool": &schema.Schema{
-				Type:        schema.TypeString,
-				Default:     "default",
-				Description: "Pool to operate for machine actions (Machine.Pool)",
-				ForceNew:    true,
-				Optional:    true,
-			},
-			"timeout": &schema.Schema{
-				Type:        schema.TypeString,
-				Default:     "5m",
-				Description: "Pooling Request: max time string to wait for pool operations",
-				Optional:    true,
-			},
-			"add_profiles": &schema.Schema{
-				Type:        schema.TypeList,
-				Description: "Pooling Request: Profiles to add to Machine.Profiles (must already exist)",
-				Optional:    true,
-				ForceNew:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			// sets parameters to add
-			"add_parameters": &schema.Schema{
-				Type:        schema.TypeList,
-				Description: "Pooling Request: Parameters (key: value) to add to Machine.Params",
-				Optional:    true,
-				ForceNew:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-
-			// sets parameters to add
-			"filters": &schema.Schema{
-				Type:        schema.TypeList,
-				Description: "Pooling Request: Selection Filters (uses Digital Rebar format e.g. FilterVar=value)",
-				Optional:    true,
-				ForceNew:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-
-			"authorized_keys": &schema.Schema{
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "Pooling Request: Sets access-keys param on machine requested",
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-
-			// Machine.Address
-			"address": &schema.Schema{
-				Type:        schema.TypeString,
-				Description: "Returns Digital Rebar Machine.Address",
-				Computed:    true,
-			},
-			// Machine.Status
-			"status": &schema.Schema{
-				Type:        schema.TypeString,
-				Description: "Returns Digital Rebar Machine.Status",
-				Computed:    true,
-			},
-			// Machine.Name
-			"name": &schema.Schema{
-				Type:        schema.TypeString,
-				Description: "Returns Digital Rebar Machine.Name",
-				Computed:    true,
-			},
-		},
-
-		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(25 * time.Minute),
-			Update: schema.DefaultTimeout(10 * time.Minute),
-			Delete: schema.DefaultTimeout(10 * time.Minute),
-		},
-	}
-
-	return r
+type machineResource struct {
+	client *Config
 }
 
-func resourceMachineAllocate(d *schema.ResourceData, m interface{}) error {
-	log.Println("[DEBUG] [resourceMachineAllocate] Allocating new drp_machine")
-	cc := m.(*Config)
+func NewMachineResource() resource.Resource {
+	return &machineResource{}
+}
 
-	pool := d.Get("pool").(string)
+func (r *machineResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "drp_machine"
+}
+
+func (r *machineResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed:            true,
+				Description:         "Machine UUID allocated from the pool.",
+				MarkdownDescription: "Machine UUID allocated from the pool.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"pool": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("default"),
+				Description:         "Pool to operate for machine actions (Machine.Pool).",
+				MarkdownDescription: "Pool to operate for machine actions (Machine.Pool).",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"timeout": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("5m"),
+				Description:         "Max time string to wait for pool operations.",
+				MarkdownDescription: "Max time string to wait for pool operations.",
+			},
+			"add_profiles": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "Profiles to add to Machine.Profiles (must already exist).",
+				MarkdownDescription: "Profiles to add to Machine.Profiles (must already exist).",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+			},
+			"add_parameters": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "Parameters (key: value) to add to Machine.Params.",
+				MarkdownDescription: "Parameters (key: value) to add to Machine.Params.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+			},
+			"filters": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "Selection filters (Digital Rebar format e.g. FilterVar=value).",
+				MarkdownDescription: "Selection filters (Digital Rebar format e.g. FilterVar=value).",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+			},
+			"authorized_keys": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "Sets access-keys param on the machine requested.",
+				MarkdownDescription: "Sets access-keys param on the machine requested.",
+			},
+			"address": schema.StringAttribute{
+				Computed:            true,
+				Description:         "Digital Rebar Machine.Address.",
+				MarkdownDescription: "Digital Rebar Machine.Address.",
+			},
+			"status": schema.StringAttribute{
+				Computed:            true,
+				Description:         "Digital Rebar Machine.Status / pool status.",
+				MarkdownDescription: "Digital Rebar Machine.Status / pool status.",
+			},
+			"name": schema.StringAttribute{
+				Computed:            true,
+				Description:         "Digital Rebar Machine.Name.",
+				MarkdownDescription: "Digital Rebar Machine.Name.",
+			},
+		},
+	}
+}
+
+func (r *machineResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.client = configureResourceClient(req, resp)
+}
+
+type machineResourceModel struct {
+	ID             types.String `tfsdk:"id"`
+	Pool           types.String `tfsdk:"pool"`
+	Timeout        types.String `tfsdk:"timeout"`
+	AddProfiles    types.List   `tfsdk:"add_profiles"`
+	AddParameters  types.List   `tfsdk:"add_parameters"`
+	Filters        types.List   `tfsdk:"filters"`
+	AuthorizedKeys types.List   `tfsdk:"authorized_keys"`
+	Address        types.String `tfsdk:"address"`
+	Status         types.String `tfsdk:"status"`
+	Name           types.String `tfsdk:"name"`
+}
+
+func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		return
+	}
+	var plan machineResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	pool := plan.Pool.ValueString()
 	if pool == "" {
 		pool = "default"
 	}
-	d.Set("pool", pool)
-	timeout := d.Get("timeout").(string)
+	timeout := plan.Timeout.ValueString()
 	parms := map[string]interface{}{
 		"pool/wait-timeout": timeout,
 	}
-	d.Set("timeout", timeout)
 
-	if profiles, ok := d.GetOk("add_profiles"); ok {
-		parms["pool/add-profiles"] = profiles.([]interface{})
+	if !plan.AddProfiles.IsNull() && !plan.AddProfiles.IsUnknown() {
+		profiles, d := diagListToStringSlice(ctx, plan.AddProfiles)
+		resp.Diagnostics.Append(d...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if len(profiles) > 0 {
+			ifaces := make([]interface{}, len(profiles))
+			for i, p := range profiles {
+				ifaces[i] = p
+			}
+			parms["pool/add-profiles"] = ifaces
+		}
 	}
 
 	parameters := map[string]interface{}{}
-	if ap, ok := d.GetOk("authorized_keys"); ok {
-		akeys := ap.([]interface{})
+	if !plan.AuthorizedKeys.IsNull() && !plan.AuthorizedKeys.IsUnknown() {
+		akeys, d := diagListToStringSlice(ctx, plan.AuthorizedKeys)
+		resp.Diagnostics.Append(d...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 		accesskeys := map[string]string{}
 		for i, p := range akeys {
-			accesskeys[fmt.Sprintf("terraform-%d", i)] = p.(string)
+			accesskeys[fmt.Sprintf("terraform-%d", i)] = p
 		}
-		parameters["access-keys"] = accesskeys
+		if len(accesskeys) > 0 {
+			parameters["access-keys"] = accesskeys
+		}
 	}
-	if ap, ok := d.GetOk("add_parameters"); ok {
-		aparams := ap.([]interface{})
+	if !plan.AddParameters.IsNull() && !plan.AddParameters.IsUnknown() {
+		aparams, d := diagListToStringSlice(ctx, plan.AddParameters)
+		resp.Diagnostics.Append(d...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 		for _, p := range aparams {
-			param := strings.Split(p.(string), ":")
+			param := strings.SplitN(p, ":", 2)
 			if len(param) < 2 {
-				return fmt.Errorf("Error in add_parameter format: %+v", aparams)
+				resp.Diagnostics.AddError("Invalid add_parameters entry", fmt.Sprintf("expected key:value, got %q", p))
+				return
 			}
 			key := param[0]
 			value := strings.TrimLeft(param[1], " ")
@@ -150,131 +202,166 @@ func resourceMachineAllocate(d *schema.ResourceData, m interface{}) error {
 		parms["pool/add-parameters"] = parameters
 	}
 
-	if filters, ok := d.GetOk("filters"); ok {
-		parms["pool/filter"] = filters.([]interface{})
+	if !plan.Filters.IsNull() && !plan.Filters.IsUnknown() {
+		filters, d := diagListToStringSlice(ctx, plan.Filters)
+		resp.Diagnostics.Append(d...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if len(filters) > 0 {
+			ifaces := make([]interface{}, len(filters))
+			for i, f := range filters {
+				ifaces[i] = f
+			}
+			parms["pool/filter"] = ifaces
+		}
 	}
 
 	pr := []*models.PoolResult{}
-	req := cc.session.Req().Post(parms).UrlFor("pools", pool, "allocateMachines")
-	if err := req.Do(&pr); err != nil {
-		log.Printf("[DEBUG] POST error %+v | %+v", err, req)
-		return fmt.Errorf("Error allocated from pool %s: %s", pool, err)
+	reqAPI := r.client.session.Req().Post(parms).UrlFor("pools", pool, "allocateMachines")
+	if err := reqAPI.Do(&pr); err != nil {
+		tflog.Debug(ctx, "allocateMachines failed", map[string]interface{}{"error": err.Error()})
+		resp.Diagnostics.AddError("Allocation failed", fmt.Sprintf("Error allocating from pool %s: %s", pool, err))
+		return
 	}
 	mc := pr[0]
-	log.Printf("[DEBUG] Allocated %s machine %s (%s)", mc.Status, mc.Name, mc.Uuid)
-	d.Set("status", mc.Status)
-	d.Set("name", mc.Name)
-	d.SetId(mc.Uuid)
-	return resourceMachineRead(d, m)
+	tflog.Debug(ctx, "allocated machine", map[string]interface{}{"status": mc.Status, "name": mc.Name, "uuid": mc.Uuid})
+
+	plan.ID = types.StringValue(mc.Uuid)
+	plan.Status = types.StringValue(string(mc.Status))
+	plan.Name = types.StringValue(mc.Name)
+	r.machineReadIntoModel(ctx, mc.Uuid, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceMachineRead(d *schema.ResourceData, m interface{}) error {
-	log.Println("[DEBUG] [resourceMachineRead] Reading drp_machine")
-	cc := m.(*Config)
-
-	uuid := d.Id()
-	if uuid == "" {
-		return fmt.Errorf("Requires Uuid from id")
+func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		return
 	}
+	var state machineResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.machineReadIntoModel(ctx, state.ID.ValueString(), &state, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
 
-	log.Printf("[DEBUG] Reading machine %s", uuid)
-	mo, err := cc.session.GetModel("machines", uuid)
+func (r *machineResource) machineReadIntoModel(ctx context.Context, uuid string, m *machineResourceModel, diags *diag.Diagnostics) {
+	if uuid == "" {
+		return
+	}
+	mo, err := r.client.session.GetModel("machines", uuid)
 	if err != nil {
-		if strings.HasSuffix(err.Error(), "Not Found") {
-			d.SetId("")
-			return nil
-		} else {
-			log.Printf("[ERROR] [resourceMachineRead] Unable to get machine: %s", uuid)
-			return fmt.Errorf("unable to get machine %s", uuid)
+		if isNotFound(err) {
+			m.ID = types.StringNull()
+			return
 		}
+		diags.AddError("Read machine failed", fmt.Sprintf("unable to get machine %s: %s", uuid, err))
+		return
 	}
 	machineObject := mo.(*models.Machine)
-
-	d.Set("status", machineObject.PoolStatus)
-	d.Set("address", machineObject.Address.String())
-	d.Set("name", machineObject.Name)
-
-	return nil
+	m.Status = types.StringValue(string(machineObject.PoolStatus))
+	m.Address = types.StringValue(machineObject.Address.String())
+	m.Name = types.StringValue(machineObject.Name)
 }
 
-func resourceMachineUpdate(d *schema.ResourceData, m interface{}) error {
-	log.Println("[DEBUG] [resourceMachineUpdate] Updating drp_machine")
-	cc := m.(*Config)
-
-	// at this time there are no updates
-	log.Printf("[DEBUG] Config %v", cc)
-
-	return resourceMachineRead(d, m)
+func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		return
+	}
+	var state machineResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.machineReadIntoModel(ctx, state.ID.ValueString(), &state, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func resourceMachineRelease(d *schema.ResourceData, m interface{}) error {
-	log.Println("[DEBUG] [resourceMachineRelease] Releasing drp_machine")
-	cc := m.(*Config)
+func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		return
+	}
+	var state machineResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	uuid := d.Id()
+	uuid := state.ID.ValueString()
 	if uuid == "" {
-		return fmt.Errorf("Requires Uuid from id")
+		return
 	}
-	pool := d.Get("pool").(string)
+	pool := state.Pool.ValueString()
 	if pool == "" {
-		return fmt.Errorf("Requires Pool")
-	}
-	log.Printf("[DEBUG] Releasing %s from %s", uuid, pool)
-
-	// Getting machine state
-	err := resourceMachineRead(d, m)
-	if err != nil {
-		return fmt.Errorf("failed to read machine data: %s", err)
+		resp.Diagnostics.AddError("Delete machine failed", "pool is required to release the machine")
+		return
 	}
 
-	if d.Get("status").(string) == "Free" {
-		return nil
+	var readState machineResourceModel
+	readState.ID = state.ID
+	readState.Pool = state.Pool
+	readState.Timeout = state.Timeout
+	readState.AddProfiles = state.AddProfiles
+	readState.AddParameters = state.AddParameters
+	readState.Filters = state.Filters
+	readState.AuthorizedKeys = state.AuthorizedKeys
+	r.machineReadIntoModel(ctx, uuid, &readState, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if readState.Status.ValueString() == "Free" {
+		return
 	}
 
 	pr := []*models.PoolResult{}
 	parms := map[string]interface{}{
-		"pool/wait-timeout": d.Get("timeout").(string),
+		"pool/wait-timeout": state.Timeout.ValueString(),
 		"pool/machine-list": []string{uuid},
 	}
-	// remove the added profiles
-	if profiles, ok := d.GetOk("add_profiles"); ok {
-		parms["pool/remove-profiles"] = profiles.([]interface{})
-	}
-
-	parameters := []string{}
-	if _, ok := d.GetOk("authorized_keys"); ok {
-		parameters = append(parameters, "access-keys")
-	}
-	if ap, ok := d.GetOk("add_parameters"); ok {
-		aparams := ap.([]interface{})
-		for _, p := range aparams {
-			param := strings.Split(p.(string), ":")
-			if len(param) < 2 {
-				return fmt.Errorf("Error in add_parameter format: %+v", aparams)
+	if !state.AddProfiles.IsNull() && !state.AddProfiles.IsUnknown() {
+		profiles, d := diagListToStringSlice(ctx, state.AddProfiles)
+		resp.Diagnostics.Append(d...)
+		if len(profiles) > 0 {
+			ifaces := make([]interface{}, len(profiles))
+			for i, p := range profiles {
+				ifaces[i] = p
 			}
-			key := param[0]
-			parameters = append(parameters, key)
+			parms["pool/remove-profiles"] = ifaces
+		}
+	}
+	parameters := []string{}
+	if !state.AuthorizedKeys.IsNull() && !state.AuthorizedKeys.IsUnknown() {
+		akeys, d := diagListToStringSlice(ctx, state.AuthorizedKeys)
+		resp.Diagnostics.Append(d...)
+		if len(akeys) > 0 {
+			parameters = append(parameters, "access-keys")
+		}
+	}
+	if !state.AddParameters.IsNull() && !state.AddParameters.IsUnknown() {
+		aparams, d := diagListToStringSlice(ctx, state.AddParameters)
+		resp.Diagnostics.Append(d...)
+		for _, p := range aparams {
+			param := strings.SplitN(p, ":", 2)
+			if len(param) < 2 {
+				resp.Diagnostics.AddError("Invalid add_parameters entry", fmt.Sprintf("expected key:value, got %q", p))
+				return
+			}
+			parameters = append(parameters, param[0])
 		}
 	}
 	if len(parameters) > 0 {
 		parms["pool/remove-parameters"] = parameters
 	}
 
-	req := cc.session.Req().Post(parms).UrlFor("pools", pool, "releaseMachines")
-	if err := req.Do(&pr); err != nil {
-		log.Printf("[DEBUG] POST error %+v | %+v", err, req)
-		return fmt.Errorf("Error releasing %s from pool %s: %s", uuid, pool, err)
+	reqAPI := r.client.session.Req().Post(parms).UrlFor("pools", pool, "releaseMachines")
+	if err := reqAPI.Do(&pr); err != nil {
+		resp.Diagnostics.AddError("Release failed", fmt.Sprintf("Error releasing %s from pool %s: %s", uuid, pool, err))
+		return
 	}
-
 	mc := pr[0]
-	if mc.Status == "Free" {
-		d.Set("status", mc.Status)
-		d.Set("address", "")
-		d.Set("name", uuid)
-		d.SetId("")
-		return nil
-	} else {
-		return fmt.Errorf("Could not release %s from pool %s", uuid, pool)
+	if mc.Status != "Free" {
+		resp.Diagnostics.AddError("Release failed", fmt.Sprintf("Could not release %s from pool %s", uuid, pool))
 	}
-
 }

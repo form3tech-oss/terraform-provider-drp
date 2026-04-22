@@ -1,316 +1,309 @@
 package drpv4
 
 import (
-	"log"
+	"context"
 	"net"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-// resourceSubnet represents a subnet in the DRP system
-//
-//	resource "drp_subnet" "subnet" {
-//	  name = "subnet"
-//	  description = "subnet"
-//	  documenation = "subnet"
-//	  enabled = true
-//	  subnet = "255.255.255.0"
-//	  active_start = "192.168.1.1"
-//	  active_end = "192.168.1.255"
-//	  active_lease_time = 86400
-//	  next_server = "192.168.2.1"
-//	  only_reservations = false
-//
-//	  options {
-//	    code = "value1"
-//	    value = "value2"
-//	  }
-//
-//	  options {
-//	    code = "value3"
-//	    value = "value4"
-//	  }
-//
-//	  pickers = ["picker1", "picker2"]
-//	  proxy = false
-//	  reserved_lease_time = 86400
-//	  strategy = "strategy"
-//	  unmanaged = false
-//	}
-func resourceSubnet() *schema.Resource {
-	r := &schema.Resource{
-		Create: resourceSubnetCreate,
-		Read:   resourceSubnetRead,
-		Update: resourceSubnetUpdate,
-		Delete: resourceSubnetDelete,
+var _ resource.Resource = (*subnetResource)(nil)
+var _ resource.ResourceWithImportState = (*subnetResource)(nil)
 
-		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:        schema.TypeString,
-				Description: "Subnet name",
-				ForceNew:    true,
-				Required:    true,
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Description: "Subnet description",
-				Optional:    true,
-			},
-			"documentation": {
-				Type:        schema.TypeString,
-				Description: "Subnet documentation",
-				Optional:    true,
-			},
-			"enabled": {
-				Type:        schema.TypeBool,
-				Description: "Subnet enabled",
-				Optional:    true,
-			},
-			"subnet": {
-				Type:        schema.TypeString,
-				Description: "Subnet subnet",
-				Required:    true,
-			},
-			"active_start": {
-				Type:        schema.TypeString,
-				Description: "Subnet active start",
-				Required:    true,
-			},
-			"active_end": {
-				Type:        schema.TypeString,
-				Description: "Subnet active end",
-				Required:    true,
-			},
-			"active_lease_time": {
-				Type:        schema.TypeInt,
-				Description: "Subnet active lease time",
-				Optional:    true,
-				Default:     60,
-			},
-			"next_server": {
-				Type:        schema.TypeString,
-				Description: "Subnet next server",
-				Optional:    true,
-			},
-			"only_reservations": {
-				Type:        schema.TypeBool,
-				Description: "Subnet only reservations",
-				Optional:    true,
-			},
-			"options": {
-				Type:        schema.TypeList,
-				Description: "Subnet options",
-				Optional:    true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"code": {
-							Type:        schema.TypeInt,
-							Description: "Subnet option code",
-							Required:    true,
-						},
-						"value": {
-							Type:        schema.TypeString,
-							Description: "Subnet option value",
-							Required:    true,
-						},
-					},
-				},
-			},
-			"pickers": {
-				Type:        schema.TypeList,
-				Description: "Subnet pickers",
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"proxy": {
-				Type:        schema.TypeBool,
-				Description: "Subnet proxy",
-				Optional:    true,
-			},
-			"reserved_lease_time": {
-				Type:        schema.TypeInt,
-				Description: "Subnet reserved lease time",
-				Optional:    true,
-				Default:     7200,
-			},
-			"strategy": {
-				Type:        schema.TypeString,
-				Description: "Subnet strategy",
-				Optional:    true,
-				Default:     "MAC",
-			},
-			"unmanaged": {
-				Type:        schema.TypeBool,
-				Description: "Subnet unmanaged",
-				Optional:    true,
-			},
+type subnetResource struct {
+	client *Config
+}
+
+func NewSubnetResource() resource.Resource {
+	return &subnetResource{}
+}
+
+func (r *subnetResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "drp_subnet"
+}
+
+func dhcpOptionAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"code": schema.Int64Attribute{Required: true, Description: "DHCP option code."},
+		"value": schema.StringAttribute{
+			Required:            true,
+			Description:         "DHCP option value.",
+			MarkdownDescription: "DHCP option value.",
 		},
 	}
-
-	return r
 }
 
-// flattenSubnetOptions flattens the options list
-func flattenSubnetOptions(options []models.DhcpOption) []interface{} {
-	result := make([]interface{}, len(options))
+func (r *subnetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Required:            true,
+				Description:         "Subnet name.",
+				MarkdownDescription: "Subnet name.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"description":   schema.StringAttribute{Optional: true},
+			"documentation": schema.StringAttribute{Optional: true},
+			"enabled":       schema.BoolAttribute{Optional: true},
+			"subnet":        schema.StringAttribute{Required: true, Description: "CIDR or subnet mask."},
+			"active_start":  schema.StringAttribute{Required: true},
+			"active_end":    schema.StringAttribute{Required: true},
+			"active_lease_time": schema.Int64Attribute{
+				Optional: true,
+				Computed: true,
+				Default:  int64default.StaticInt64(60),
+			},
+			"next_server": schema.StringAttribute{Optional: true},
+			"only_reservations": schema.BoolAttribute{
+				Optional: true,
+			},
+			"options": schema.ListNestedAttribute{
+				Optional:     true,
+				NestedObject: schema.NestedAttributeObject{Attributes: dhcpOptionAttributes()},
+			},
+			"pickers": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"proxy": schema.BoolAttribute{Optional: true},
+			"reserved_lease_time": schema.Int64Attribute{
+				Optional: true,
+				Computed: true,
+				Default:  int64default.StaticInt64(7200),
+			},
+			"strategy": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString("MAC"),
+			},
+			"unmanaged": schema.BoolAttribute{Optional: true},
+		},
+	}
+}
 
-	for i, option := range options {
-		result[i] = map[string]interface{}{
-			"code":  int32(option.Code),
-			"value": option.Value,
+func (r *subnetResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.client = configureResourceClient(req, resp)
+}
+
+type subnetResourceModel struct {
+	Name              types.String `tfsdk:"name"`
+	Description       types.String `tfsdk:"description"`
+	Documentation     types.String `tfsdk:"documentation"`
+	Enabled           types.Bool   `tfsdk:"enabled"`
+	Subnet            types.String `tfsdk:"subnet"`
+	ActiveStart       types.String `tfsdk:"active_start"`
+	ActiveEnd         types.String `tfsdk:"active_end"`
+	ActiveLeaseTime   types.Int64  `tfsdk:"active_lease_time"`
+	NextServer        types.String `tfsdk:"next_server"`
+	OnlyReservations  types.Bool   `tfsdk:"only_reservations"`
+	Options           types.List   `tfsdk:"options"`
+	Pickers           types.List   `tfsdk:"pickers"`
+	Proxy             types.Bool   `tfsdk:"proxy"`
+	ReservedLeaseTime types.Int64  `tfsdk:"reserved_lease_time"`
+	Strategy          types.String `tfsdk:"strategy"`
+	Unmanaged         types.Bool   `tfsdk:"unmanaged"`
+}
+
+func dhcpOptionObjType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{
+		"code":  types.Int64Type,
+		"value": types.StringType,
+	}}
+}
+
+func (r *subnetResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+}
+
+func (r *subnetResource) expandSubnetOptions(ctx context.Context, l types.List, diags *diag.Diagnostics) []models.DhcpOption {
+	if l.IsNull() || l.IsUnknown() {
+		return nil
+	}
+	out := make([]models.DhcpOption, 0, len(l.Elements()))
+	for _, el := range l.Elements() {
+		o, ok := el.(types.Object)
+		if !ok {
+			diags.AddError("Invalid options element", "expected object")
+			return nil
 		}
+		code := o.Attributes()["code"].(types.Int64)
+		val := o.Attributes()["value"].(types.String)
+		out = append(out, models.DhcpOption{
+			Code:  byte(code.ValueInt64()),
+			Value: val.ValueString(),
+		})
 	}
-
-	return result
+	return out
 }
 
-// flattenSubnet flattens the subnet object
-func flattenSubnet(d *schema.ResourceData, subnet *models.Subnet) {
-	d.Set("name", subnet.Name)
-	d.Set("description", subnet.Description)
-	d.Set("documentation", subnet.Documentation)
-	d.Set("enabled", subnet.Enabled)
-	d.Set("subnet", subnet.Subnet)
-	d.Set("active_start", subnet.ActiveStart.String())
-	d.Set("active_end", subnet.ActiveEnd.String())
-	d.Set("active_lease_time", subnet.ActiveLeaseTime)
-
-	if subnet.NextServer != nil {
-		d.Set("next_server", subnet.NextServer.String())
+func (r *subnetResource) expandSubnet(ctx context.Context, m *subnetResourceModel, diags *diag.Diagnostics) *models.Subnet {
+	enabled := false
+	if !m.Enabled.IsNull() && !m.Enabled.IsUnknown() {
+		enabled = m.Enabled.ValueBool()
 	}
-
-	d.Set("only_reservations", subnet.OnlyReservations)
-
-	if subnet.Options != nil {
-		d.Set("options", flattenSubnetOptions(subnet.Options))
+	only := false
+	if !m.OnlyReservations.IsNull() && !m.OnlyReservations.IsUnknown() {
+		only = m.OnlyReservations.ValueBool()
 	}
-
-	if subnet.Pickers != nil {
-		d.Set("pickers", subnet.Pickers)
+	proxy := false
+	if !m.Proxy.IsNull() && !m.Proxy.IsUnknown() {
+		proxy = m.Proxy.ValueBool()
 	}
-
-	d.Set("proxy", subnet.Proxy)
-	d.Set("reserved_lease_time", subnet.ReservedLeaseTime)
-	d.Set("strategy", subnet.Strategy)
-	d.Set("unmanaged", subnet.Unmanaged)
+	unmanaged := false
+	if !m.Unmanaged.IsNull() && !m.Unmanaged.IsUnknown() {
+		unmanaged = m.Unmanaged.ValueBool()
+	}
+	var next net.IP
+	if !m.NextServer.IsNull() && m.NextServer.ValueString() != "" {
+		next = net.ParseIP(m.NextServer.ValueString())
+	}
+	return &models.Subnet{
+		Name:              m.Name.ValueString(),
+		Description:       m.Description.ValueString(),
+		Documentation:     m.Documentation.ValueString(),
+		Enabled:           enabled,
+		Subnet:            m.Subnet.ValueString(),
+		ActiveStart:       net.ParseIP(m.ActiveStart.ValueString()),
+		ActiveEnd:         net.ParseIP(m.ActiveEnd.ValueString()),
+		ActiveLeaseTime:   int32(m.ActiveLeaseTime.ValueInt64()),
+		NextServer:        next,
+		OnlyReservations:  only,
+		Options:           r.expandSubnetOptions(ctx, m.Options, diags),
+		Pickers:           diagListToStrings(ctx, m.Pickers, diags),
+		Proxy:             proxy,
+		ReservedLeaseTime: int32(m.ReservedLeaseTime.ValueInt64()),
+		Strategy:          m.Strategy.ValueString(),
+		Unmanaged:         unmanaged,
+	}
 }
 
-// expandSubnetOptions expands the options list
-func expandSubnetOptions(options []interface{}) []models.DhcpOption {
-	result := make([]models.DhcpOption, len(options))
-
-	for i, option := range options {
-		data := option.(map[string]interface{})
-
-		result[i] = models.DhcpOption{
-			Code:  byte(data["code"].(int)),
-			Value: data["value"].(string),
+func (r *subnetResource) flattenSubnetOptions(ctx context.Context, opts []models.DhcpOption, diags *diag.Diagnostics) types.List {
+	if len(opts) == 0 {
+		return types.ListNull(dhcpOptionObjType())
+	}
+	objs := make([]attr.Value, 0, len(opts))
+	for _, opt := range opts {
+		attrs := map[string]attr.Value{
+			"code":  types.Int64Value(int64(opt.Code)),
+			"value": types.StringValue(opt.Value),
 		}
+		obj, d := types.ObjectValue(dhcpOptionObjType().AttrTypes, attrs)
+		diags.Append(d...)
+		objs = append(objs, obj)
 	}
-
-	return result
+	return types.ListValueMust(dhcpOptionObjType(), objs)
 }
 
-// expandSubnet expands the subnet object
-func expandSubnet(d *schema.ResourceData) *models.Subnet {
-	subnet := &models.Subnet{
-		Name:              d.Get("name").(string),
-		Description:       d.Get("description").(string),
-		Documentation:     d.Get("documentation").(string),
-		Enabled:           d.Get("enabled").(bool),
-		Subnet:            d.Get("subnet").(string),
-		ActiveStart:       net.ParseIP(d.Get("active_start").(string)),
-		ActiveEnd:         net.ParseIP(d.Get("active_end").(string)),
-		ActiveLeaseTime:   int32(d.Get("active_lease_time").(int)),
-		NextServer:        net.ParseIP(d.Get("next_server").(string)),
-		OnlyReservations:  d.Get("only_reservations").(bool),
-		Options:           expandSubnetOptions(d.Get("options").([]interface{})),
-		Pickers:           expandStringList(d.Get("pickers")),
-		Proxy:             d.Get("proxy").(bool),
-		ReservedLeaseTime: int32(d.Get("reserved_lease_time").(int)),
-		Strategy:          d.Get("strategy").(string),
-		Unmanaged:         d.Get("unmanaged").(bool),
+func (r *subnetResource) flattenSubnet(ctx context.Context, s *models.Subnet, m *subnetResourceModel, diags *diag.Diagnostics) {
+	m.Name = types.StringValue(s.Name)
+	m.Description = types.StringValue(s.Description)
+	m.Documentation = types.StringValue(s.Documentation)
+	m.Enabled = types.BoolValue(s.Enabled)
+	m.Subnet = types.StringValue(s.Subnet)
+	m.ActiveStart = types.StringValue(s.ActiveStart.String())
+	m.ActiveEnd = types.StringValue(s.ActiveEnd.String())
+	m.ActiveLeaseTime = types.Int64Value(int64(s.ActiveLeaseTime))
+	if s.NextServer != nil {
+		m.NextServer = types.StringValue(s.NextServer.String())
+	} else {
+		m.NextServer = types.StringNull()
 	}
-
-	return subnet
+	m.OnlyReservations = types.BoolValue(s.OnlyReservations)
+	m.Options = r.flattenSubnetOptions(ctx, s.Options, diags)
+	m.Pickers = mustListStrings(ctx, s.Pickers, diags)
+	m.Proxy = types.BoolValue(s.Proxy)
+	m.ReservedLeaseTime = types.Int64Value(int64(s.ReservedLeaseTime))
+	m.Strategy = types.StringValue(s.Strategy)
+	m.Unmanaged = types.BoolValue(s.Unmanaged)
 }
 
-// resourceSubnetCreate creates the subnet resource
-func resourceSubnetCreate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("[DEBUG] Creating subnet: %s", d.Get("name").(string))
-
-	subnet := expandSubnet(d)
-
-	err := c.session.CreateModel(subnet)
-	if err != nil {
-		return err
+func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		return
 	}
-
-	d.SetId(subnet.Name)
-
-	return resourceSubnetRead(d, m)
+	var plan subnetResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	sub := r.expandSubnet(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.CreateModel(sub); err != nil {
+		resp.Diagnostics.AddError("Create subnet failed", err.Error())
+		return
+	}
+	r.flattenSubnet(ctx, sub, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// resourceSubnetRead reads the subnet resource
-func resourceSubnetRead(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("[DEBUG] Reading subnet: %s", d.Id())
-
-	res, err := c.session.GetModel("subnets", d.Id())
+func (r *subnetResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		return
+	}
+	var state subnetResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	res, err := r.client.session.GetModel("subnets", state.Name.ValueString())
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "Not Found") {
-			d.SetId("")
-			flattenSubnet(d, &models.Subnet{})
-			return nil
-		} else {
-			return err
+			resp.State.RemoveResource(ctx)
+			return
 		}
+		resp.Diagnostics.AddError("Read subnet failed", err.Error())
+		return
 	}
-
-	subnet := res.(*models.Subnet)
-
-	flattenSubnet(d, subnet)
-
-	return nil
+	r.flattenSubnet(ctx, res.(*models.Subnet), &state, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// resourceSubnetUpdate updates the subnet resource
-func resourceSubnetUpdate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	subnet := expandSubnet(d)
-
-	log.Printf("[DEBUG] Updating subnet: %#v", subnet)
-
-	err := c.session.PutModel(subnet)
-	if err != nil {
-		return err
+func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		return
 	}
-
-	return resourceSubnetRead(d, m)
+	var plan subnetResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	sub := r.expandSubnet(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.PutModel(sub); err != nil {
+		resp.Diagnostics.AddError("Update subnet failed", err.Error())
+		return
+	}
+	r.flattenSubnet(ctx, sub, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// resourceSubnetDelete deletes the subnet resource
-func resourceSubnetDelete(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("[DEBUG] Deleting subnet: %s", d.Id())
-
-	res, err := c.session.DeleteModel("subnets", d.Id())
-	if err != nil {
-		return err
+func (r *subnetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		return
 	}
-
-	log.Printf("[DEBUG] Deleted subnet: %#v", res)
-
-	d.SetId("")
-
-	return nil
+	var state subnetResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if _, err := r.client.session.DeleteModel("subnets", state.Name.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Delete subnet failed", err.Error())
+	}
 }

@@ -1,349 +1,373 @@
 package drpv4
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"strings"
-	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-// resourceTask is the Terraform resource for a task
-//
-//	resource "drp_task" "test" {
-//	  name = "test"
-//	  description = "test"
-//	  required_params = ["test"]
-//	  optional_params = ["test"]
-//	  templates {
-//		 name = "test"
-//		 path = "test"
-//		 contents = "test"
-//		 link = "test"
-//		 meta = {
-//			test = "test"
-//		 }
-//	  }
-//	  extra_claims {
-//		 scope = "test"
-//		 action = "test"
-//		 specific = "test"
-//	  }
-//	  extra_roles = ["test"]
-//	  prerequisites = ["test"]
-// }
+var _ resource.Resource = (*taskResource)(nil)
+var _ resource.ResourceWithImportState = (*taskResource)(nil)
 
-func resourceTask() *schema.Resource {
-	r := &schema.Resource{
-		Create: resourceTaskCreate,
-		Read:   resourceTaskRead,
-		Update: resourceTaskUpdate,
-		Delete: resourceTaskDelete,
+type taskResource struct {
+	client *Config
+}
 
-		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:        schema.TypeString,
-				Description: "Task name",
-				Required:    true,
-				ForceNew:    true,
-				Optional:    false,
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Description: "Task description",
-				ForceNew:    false,
-				Optional:    true,
-			},
-			"required_params": {
-				Type:        schema.TypeList,
-				Description: "Task required params",
-				ForceNew:    false,
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"optional_params": {
-				Type:        schema.TypeList,
-				Description: "Task optional params",
-				ForceNew:    false,
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"templates": {
-				Type:        schema.TypeList,
-				Description: "Task templates",
-				ForceNew:    false,
-				Optional:    true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"template_id": {
-							Type:        schema.TypeString,
-							Description: "Template id",
-							ForceNew:    false,
-							Optional:    true,
-						},
-						"name": {
-							Type:        schema.TypeString,
-							Description: "Template name",
-							Required:    true,
-							ForceNew:    false,
-						},
-						"path": {
-							Type:        schema.TypeString,
-							Description: "Template path",
-							ForceNew:    false,
-							Optional:    true,
-						},
-						"contents": {
-							Type:        schema.TypeString,
-							Description: "Template contents",
-							ForceNew:    false,
-							Optional:    true,
-						},
-						"link": {
-							Type:        schema.TypeString,
-							Description: "Template link",
-							ForceNew:    false,
-							Optional:    true,
-						},
-						"meta": {
-							Type:        schema.TypeMap,
-							Description: "Template meta",
-							ForceNew:    false,
-							Optional:    true,
-							Elem: &schema.Schema{
-								Type: schema.TypeString,
-							},
-						},
-					},
-				},
-			},
-			"extra_claims": {
-				Type:        schema.TypeSet,
-				Description: "Task extra claims",
-				ForceNew:    false,
-				Optional:    true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"scope": {
-							Type:        schema.TypeString,
-							Description: "Claim scope",
-							ForceNew:    false,
-							Optional:    true,
-						},
-						"action": {
-							Type:        schema.TypeString,
-							Description: "Claim action",
-							ForceNew:    false,
-							Optional:    true,
-						},
-						"specific": {
-							Type:        schema.TypeString,
-							Description: "Claim specific",
-							ForceNew:    false,
-							Optional:    true,
-						},
-					},
-				},
-			},
-			"extra_roles": {
-				Type:        schema.TypeList,
-				Description: "Task extra roles",
-				ForceNew:    false,
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"prerequisites": {
-				Type:        schema.TypeList,
-				Description: "Task prerequisites",
-				ForceNew:    false,
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-		},
+func NewTaskResource() resource.Resource {
+	return &taskResource{}
+}
 
-		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(1 * time.Minute),
-			Read:   schema.DefaultTimeout(1 * time.Minute),
-			Update: schema.DefaultTimeout(1 * time.Minute),
-			Delete: schema.DefaultTimeout(1 * time.Minute),
+func (r *taskResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "drp_task"
+}
+
+func taskTemplateNestedAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"template_id": schema.StringAttribute{Optional: true, Description: "Template id."},
+		"name":        schema.StringAttribute{Required: true, Description: "Template name."},
+		"path":        schema.StringAttribute{Optional: true, Description: "Template path."},
+		"contents":    schema.StringAttribute{Optional: true, Description: "Template contents."},
+		"link":        schema.StringAttribute{Optional: true, Description: "Template link."},
+		"meta": schema.MapAttribute{
+			ElementType: types.StringType,
+			Optional:    true,
+			Description: "Template meta (string map).",
 		},
 	}
-
-	return r
 }
 
-// flattenTemplates flattens the TemplateInfo object into the resource data.
-func flattenTemplates(templates []models.TemplateInfo) []map[string]interface{} {
-	result := make([]map[string]interface{}, len(templates))
-	for i, template := range templates {
-		result[i] = map[string]interface{}{
-			"template_id": template.ID,
-			"name":        template.Name,
-			"path":        template.Path,
-			"contents":    template.Contents,
-			"link":        template.Link,
-			"meta":        template.Meta,
-		}
+func taskClaimNestedAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"scope":    schema.StringAttribute{Optional: true, Description: "Claim scope."},
+		"action":   schema.StringAttribute{Optional: true, Description: "Claim action."},
+		"specific": schema.StringAttribute{Optional: true, Description: "Claim specific."},
 	}
-	return result
 }
 
-// flattenClaims flattens the Claim object into the resource data.
-func flattenClaims(claims []*models.Claim) []map[string]interface{} {
-	result := make([]map[string]interface{}, len(claims))
-	for i, claim := range claims {
-		result[i] = map[string]interface{}{
-			"scope":    claim.Scope,
-			"action":   claim.Action,
-			"specific": claim.Specific,
-		}
+func (r *taskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Required:            true,
+				Description:         "Task name.",
+				MarkdownDescription: "Task name.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"description": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Task description.",
+				MarkdownDescription: "Task description.",
+			},
+			"required_params": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Required params.",
+			},
+			"optional_params": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Optional params.",
+			},
+			"templates": schema.ListNestedAttribute{
+				Optional:     true,
+				NestedObject: schema.NestedAttributeObject{Attributes: taskTemplateNestedAttributes()},
+				Description:  "Inline templates.",
+			},
+			"extra_claims": schema.ListNestedAttribute{
+				Optional:     true,
+				NestedObject: schema.NestedAttributeObject{Attributes: taskClaimNestedAttributes()},
+				Description:  "Extra claims.",
+			},
+			"extra_roles": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Extra roles.",
+			},
+			"prerequisites": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Prerequisites.",
+			},
+		},
 	}
-	return result
 }
 
-// flattenTask flattens the Task object into the resource data.
-func flattenTask(d *schema.ResourceData, task *models.Task) error {
-	if err := d.Set("name", task.Name); err != nil {
-		return err
-	}
-	if err := d.Set("description", task.Description); err != nil {
-		return err
-	}
-	if err := d.Set("required_params", task.RequiredParams); err != nil {
-		return err
-	}
-	if err := d.Set("optional_params", task.OptionalParams); err != nil {
-		return err
-	}
-	if err := d.Set("extra_roles", task.ExtraRoles); err != nil {
-		return err
-	}
-	if err := d.Set("prerequisites", task.Prerequisites); err != nil {
-		return err
-	}
-	if err := d.Set("templates", flattenTemplates(task.Templates)); err != nil {
-		return err
-	}
-	if err := d.Set("extra_claims", flattenClaims(task.ExtraClaims)); err != nil {
-		return err
-	}
-	return nil
+func (r *taskResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.client = configureResourceClient(req, resp)
 }
 
-// expandTaskTemplates expands the templates into the Task object.
-func expandTaskTemplates(tpls interface{}) []models.TemplateInfo {
-	templates := []models.TemplateInfo{}
-	for _, rawTemplate := range tpls.([]interface{}) {
-		template := rawTemplate.(map[string]interface{})
-		templates = append(templates, models.TemplateInfo{
-			ID:       template["template_id"].(string),
-			Name:     template["name"].(string),
-			Path:     template["path"].(string),
-			Contents: template["contents"].(string),
-			Link:     template["link"].(string),
-			Meta:     expandMapInterface(template["meta"]),
-		})
-	}
-
-	return templates
+type taskResourceModel struct {
+	Name           types.String `tfsdk:"name"`
+	Description    types.String `tfsdk:"description"`
+	RequiredParams types.List   `tfsdk:"required_params"`
+	OptionalParams types.List   `tfsdk:"optional_params"`
+	Templates      types.List   `tfsdk:"templates"`
+	ExtraClaims    types.List   `tfsdk:"extra_claims"`
+	ExtraRoles     types.List   `tfsdk:"extra_roles"`
+	Prerequisites  types.List   `tfsdk:"prerequisites"`
 }
 
-// expandClaims expands the claims into the Task object.
-func expandClaims(claims interface{}) []*models.Claim {
-	result := []*models.Claim{}
-	for _, rawClaim := range claims.(*schema.Set).List() {
-		claim := rawClaim.(map[string]interface{})
-		result = append(result, &models.Claim{
-			Scope:    claim["scope"].(string),
-			Action:   claim["action"].(string),
-			Specific: claim["specific"].(string),
-		})
-	}
-	return result
+func (r *taskResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
 }
 
-// expandTask expands the resource data into the Task object.
-func expandTask(d *schema.ResourceData) *models.Task {
+func templateInfoType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{
+		"template_id": types.StringType,
+		"name":        types.StringType,
+		"path":        types.StringType,
+		"contents":    types.StringType,
+		"link":        types.StringType,
+		"meta":        types.MapType{ElemType: types.StringType},
+	}}
+}
+
+func claimType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{
+		"scope":    types.StringType,
+		"action":   types.StringType,
+		"specific": types.StringType,
+	}}
+}
+
+func (r *taskResource) expandTask(ctx context.Context, m *taskResourceModel, diags *diag.Diagnostics) *models.Task {
 	task := models.Task{
-		Name:           d.Get("name").(string),
-		Description:    d.Get("description").(string),
-		RequiredParams: expandStringList(d.Get("required_params")),
-		OptionalParams: expandStringList(d.Get("optional_params")),
-		ExtraRoles:     expandStringList(d.Get("extra_roles")),
-		Prerequisites:  expandStringList(d.Get("prerequisites")),
-		Templates:      expandTaskTemplates(d.Get("templates")),
-		ExtraClaims:    expandClaims(d.Get("extra_claims")),
+		Name:           m.Name.ValueString(),
+		Description:    m.Description.ValueString(),
+		RequiredParams: diagListToStrings(ctx, m.RequiredParams, diags),
+		OptionalParams: diagListToStrings(ctx, m.OptionalParams, diags),
+		ExtraRoles:     diagListToStrings(ctx, m.ExtraRoles, diags),
+		Prerequisites:  diagListToStrings(ctx, m.Prerequisites, diags),
 	}
-
+	if diags.HasError() {
+		return nil
+	}
+	task.Templates = r.expandTaskTemplates(ctx, m.Templates, diags)
+	task.ExtraClaims = r.expandClaims(ctx, m.ExtraClaims, diags)
+	if diags.HasError() {
+		return nil
+	}
 	return &task
 }
 
-func resourceTaskCreate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	task := expandTask(d)
-
-	log.Printf("[INFO] Creating task %s", d.Id())
-
-	if err := c.session.CreateModel(task); err != nil {
-		return fmt.Errorf("error creating task: %s", err)
+func (r *taskResource) expandTaskTemplates(ctx context.Context, l types.List, diags *diag.Diagnostics) []models.TemplateInfo {
+	if l.IsNull() || l.IsUnknown() {
+		return nil
 	}
-
-	d.SetId(task.Name)
-
-	return nil
+	els := l.Elements()
+	if len(els) == 0 {
+		return nil
+	}
+	out := make([]models.TemplateInfo, 0, len(els))
+	for _, el := range els {
+		o, ok := el.(types.Object)
+		if !ok {
+			diags.AddError("Invalid templates element", "expected object")
+			return nil
+		}
+		var meta map[string]string
+		mv := o.Attributes()["meta"]
+		if mv != nil && !mv.IsNull() {
+			mmap, ok := mv.(types.Map)
+			if ok {
+				diags.Append(mmap.ElementsAs(ctx, &meta, false)...)
+			}
+		}
+		out = append(out, models.TemplateInfo{
+			ID:       objectAttrString(o, "template_id"),
+			Name:     objectAttrString(o, "name"),
+			Path:     objectAttrString(o, "path"),
+			Contents: objectAttrString(o, "contents"),
+			Link:     objectAttrString(o, "link"),
+			Meta:     meta,
+		})
+	}
+	return out
 }
 
-func resourceTaskRead(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
+func (r *taskResource) expandClaims(ctx context.Context, l types.List, diags *diag.Diagnostics) []*models.Claim {
+	if l.IsNull() || l.IsUnknown() {
+		return nil
+	}
+	els := l.Elements()
+	if len(els) == 0 {
+		return nil
+	}
+	out := make([]*models.Claim, 0, len(els))
+	for _, el := range els {
+		o, ok := el.(types.Object)
+		if !ok {
+			diags.AddError("Invalid extra_claims element", "expected object")
+			return nil
+		}
+		out = append(out, &models.Claim{
+			Scope:    objectAttrString(o, "scope"),
+			Action:   objectAttrString(o, "action"),
+			Specific: objectAttrString(o, "specific"),
+		})
+	}
+	return out
+}
 
-	log.Printf("[INFO] Reading task %s", d.Id())
+func (r *taskResource) flattenTask(ctx context.Context, task *models.Task, m *taskResourceModel, diags *diag.Diagnostics) {
+	m.Name = types.StringValue(task.Name)
+	m.Description = types.StringValue(task.Description)
+	m.RequiredParams = mustListStrings(ctx, task.RequiredParams, diags)
+	m.OptionalParams = mustListStrings(ctx, task.OptionalParams, diags)
+	m.ExtraRoles = mustListStrings(ctx, task.ExtraRoles, diags)
+	m.Prerequisites = mustListStrings(ctx, task.Prerequisites, diags)
 
-	to, err := c.session.GetModel("tasks", d.Id())
+	tplObjs := make([]types.Object, 0, len(task.Templates))
+	for _, ti := range task.Templates {
+		meta := ti.Meta
+		if meta == nil {
+			meta = map[string]string{}
+		}
+		metaVal, d := types.MapValueFrom(ctx, types.StringType, meta)
+		diags.Append(d...)
+		attrs := map[string]attr.Value{
+			"template_id": types.StringValue(ti.ID),
+			"name":        types.StringValue(ti.Name),
+			"path":        types.StringValue(ti.Path),
+			"contents":    types.StringValue(ti.Contents),
+			"link":        types.StringValue(ti.Link),
+			"meta":        metaVal,
+		}
+		obj, d := types.ObjectValue(templateInfoType().AttrTypes, attrs)
+		diags.Append(d...)
+		tplObjs = append(tplObjs, obj)
+	}
+	if len(tplObjs) == 0 {
+		m.Templates = types.ListNull(templateInfoType())
+	} else {
+		elems := make([]attr.Value, len(tplObjs))
+		for i, o := range tplObjs {
+			elems[i] = o
+		}
+		m.Templates = types.ListValueMust(templateInfoType(), elems)
+	}
+
+	claimObjs := make([]types.Object, 0, len(task.ExtraClaims))
+	for _, c := range task.ExtraClaims {
+		attrs := map[string]attr.Value{
+			"scope":    types.StringValue(c.Scope),
+			"action":   types.StringValue(c.Action),
+			"specific": types.StringValue(c.Specific),
+		}
+		obj, d := types.ObjectValue(claimType().AttrTypes, attrs)
+		diags.Append(d...)
+		claimObjs = append(claimObjs, obj)
+	}
+	if len(claimObjs) == 0 {
+		m.ExtraClaims = types.ListNull(claimType())
+	} else {
+		elems := make([]attr.Value, len(claimObjs))
+		for i, o := range claimObjs {
+			elems[i] = o
+		}
+		m.ExtraClaims = types.ListValueMust(claimType(), elems)
+	}
+}
+
+func mustListStrings(ctx context.Context, items []string, diags *diag.Diagnostics) types.List {
+	if len(items) == 0 {
+		return types.ListNull(types.StringType)
+	}
+	v, d := types.ListValueFrom(ctx, types.StringType, items)
+	diags.Append(d...)
+	return v
+}
+
+func (r *taskResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		return
+	}
+	var plan taskResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	task := r.expandTask(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.CreateModel(task); err != nil {
+		resp.Diagnostics.AddError("Create task failed", err.Error())
+		return
+	}
+	r.flattenTask(ctx, task, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (r *taskResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		return
+	}
+	var state taskResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	to, err := r.client.session.GetModel("tasks", state.Name.ValueString())
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "Not Found") {
-			d.SetId("")
-			return flattenTask(d, &models.Task{})
-		} else {
-			return fmt.Errorf("error reading task: %s", err)
+			resp.State.RemoveResource(ctx)
+			return
 		}
+		resp.Diagnostics.AddError("Read task failed", err.Error())
+		return
 	}
-
-	return flattenTask(d, to.(*models.Task))
+	r.flattenTask(ctx, to.(*models.Task), &state, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func resourceTaskUpdate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	task := expandTask(d)
-
-	log.Printf("[INFO] Updating task %s", d.Id())
-
-	if err := c.session.PutModel(task); err != nil {
-		return fmt.Errorf("error updating task: %s", err)
+func (r *taskResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		return
 	}
-
-	return nil
+	var plan taskResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	task := r.expandTask(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.PutModel(task); err != nil {
+		resp.Diagnostics.AddError("Update task failed", err.Error())
+		return
+	}
+	to, err := r.client.session.GetModel("tasks", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read task after update failed", err.Error())
+		return
+	}
+	r.flattenTask(ctx, to.(*models.Task), &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceTaskDelete(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("[INFO] Deleting task %s %v", d.Id(), c)
-
-	if _, err := c.session.DeleteModel("tasks", d.Id()); err != nil {
-		return fmt.Errorf("error deleting task: %s", err)
+func (r *taskResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		return
 	}
-
-	return nil
+	var state taskResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if _, err := r.client.session.DeleteModel("tasks", state.Name.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Delete task failed", err.Error())
+	}
 }

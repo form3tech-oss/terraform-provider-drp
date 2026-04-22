@@ -5,9 +5,10 @@ package drpv4
  */
 
 import (
+	"context"
 	"fmt"
-	"log"
 
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"gitlab.com/rackn/provision/v4/api"
 )
 
@@ -20,11 +21,8 @@ type Config struct {
 	session *api.Client
 }
 
-/*
- * Builds a client object for this config
- */
-func (c *Config) validateAndConnect() error {
-	log.Println("[DEBUG] [Config.validateAndConnect] Configuring the DRP API client")
+func (c *Config) validateAndConnect(ctx context.Context) error {
+	tflog.Debug(ctx, "Configuring the DRP API client")
 
 	if c.session != nil {
 		return nil
@@ -36,10 +34,8 @@ func (c *Config) validateAndConnect() error {
 		c.session, err = api.UserSession(c.endpoint, c.username, c.password)
 	}
 	if err != nil {
-		log.Printf("[ERROR] Error creating session: %+v", err)
-		return fmt.Errorf("Error creating session: %s", err)
-	} else {
-		log.Printf("[DEBUG] [Condig.validateAndConnect] Authenticated! Session Starting w %+v", c)
+		tflog.Error(ctx, "Error creating session", map[string]interface{}{"error": err.Error()})
+		return fmt.Errorf("error creating session: %w", err)
 	}
 
 	return nil

@@ -1,131 +1,168 @@
 package drpv4
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-// resourceWorkflow is the Terraform resource for DRP Workflows
-func resourceWorkflow() *schema.Resource {
-	return &schema.Resource{
-		Create: resourceWorkflowCreate,
-		Read:   resourceWorkflowRead,
-		Update: resourceWorkflowUpdate,
-		Delete: resourceWorkflowDelete,
+var _ resource.Resource = (*workflowResource)(nil)
+var _ resource.ResourceWithImportState = (*workflowResource)(nil)
 
-		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:     schema.TypeString,
-				ForceNew: true,
-				Required: true,
+type workflowResource struct {
+	client *Config
+}
+
+func NewWorkflowResource() resource.Resource {
+	return &workflowResource{}
+}
+
+func (r *workflowResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "drp_workflow"
+}
+
+func (r *workflowResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Required:            true,
+				Description:         "Workflow name.",
+				MarkdownDescription: "Workflow name.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"description": {
-				Type:     schema.TypeString,
-				Optional: true,
+			"description": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Workflow description.",
+				MarkdownDescription: "Workflow description.",
 			},
-			"documentation": {
-				Type:     schema.TypeString,
-				Optional: true,
+			"documentation": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Workflow documentation.",
+				MarkdownDescription: "Workflow documentation.",
 			},
-			"stages": {
-				Type:     schema.TypeList,
-				Optional: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+			"stages": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "Ordered list of stage names.",
+				MarkdownDescription: "Ordered list of stage names.",
 			},
 		},
 	}
 }
 
-// expandWorkflow expands a Terraform resource into a DRP Workflow
-func expandWorkflow(d *schema.ResourceData) *models.Workflow {
-	workflow := &models.Workflow{
-		Name:          d.Get("name").(string),
-		Description:   d.Get("description").(string),
-		Documentation: d.Get("documentation").(string),
-		Stages:        expandStringList(d.Get("stages")),
+func (r *workflowResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.client = configureResourceClient(req, resp)
+}
+
+type workflowResourceModel struct {
+	Name          types.String `tfsdk:"name"`
+	Description   types.String `tfsdk:"description"`
+	Documentation types.String `tfsdk:"documentation"`
+	Stages        types.List   `tfsdk:"stages"`
+}
+
+func (r *workflowResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+}
+
+func (r *workflowResource) expandWorkflow(ctx context.Context, m *workflowResourceModel, diags *diag.Diagnostics) *models.Workflow {
+	stages := diagListToStrings(ctx, m.Stages, diags)
+	return &models.Workflow{
+		Name:          m.Name.ValueString(),
+		Description:   m.Description.ValueString(),
+		Documentation: m.Documentation.ValueString(),
+		Stages:        stages,
 	}
-
-	return workflow
 }
 
-// flattenWorkflow flattens a DRP Workflow into a Terraform resource
-func flattenWorkflow(d *schema.ResourceData, workflow *models.Workflow) error {
-	d.Set("name", workflow.Name)
-	d.Set("description", workflow.Description)
-	d.Set("documentation", workflow.Documentation)
-	d.Set("stages", workflow.Stages)
-	return nil
-}
-
-// resourceWorkflowCreate creates a new DRP Workflow
-func resourceWorkflowCreate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	workflow := expandWorkflow(d)
-
-	log.Printf("[DEBUG] Creating DRP Workflow: %s", workflow.Name)
-
-	if err := c.session.CreateModel(workflow); err != nil {
-		return err
+func (r *workflowResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		return
 	}
-
-	d.SetId(workflow.Name)
-
-	return resourceWorkflowRead(d, m)
+	var plan workflowResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	wf := r.expandWorkflow(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.CreateModel(wf); err != nil {
+		resp.Diagnostics.AddError("Create workflow failed", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// resourceWorkflowRead reads a DRP Workflow
-func resourceWorkflowRead(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	res, err := c.session.GetModel("workflows", d.Id())
+func (r *workflowResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		return
+	}
+	var state workflowResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	res, err := r.client.session.GetModel("workflows", state.Name.ValueString())
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "Not Found") {
-			d.SetId("")
-			return flattenWorkflow(d, &models.Workflow{})
-		} else {
-			return fmt.Errorf("error reading param: %s", err)
+			resp.State.RemoveResource(ctx)
+			return
 		}
+		resp.Diagnostics.AddError("Read workflow failed", err.Error())
+		return
 	}
-
-	workflow := res.(*models.Workflow)
-
-	flattenWorkflow(d, workflow)
-
-	return nil
+	wf := res.(*models.Workflow)
+	state.Name = types.StringValue(wf.Name)
+	state.Description = types.StringValue(wf.Description)
+	state.Documentation = types.StringValue(wf.Documentation)
+	stages, d := types.ListValueFrom(ctx, types.StringType, wf.Stages)
+	resp.Diagnostics.Append(d...)
+	state.Stages = stages
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// resourceWorkflowUpdate updates a DRP Workflow
-func resourceWorkflowUpdate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	workflow := expandWorkflow(d)
-
-	log.Printf("[DEBUG] Updating DRP Workflow: %s", workflow.Name)
-
-	if err := c.session.PutModel(workflow); err != nil {
-		return err
+func (r *workflowResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		return
 	}
-
-	return resourceWorkflowRead(d, m)
+	var plan workflowResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	wf := r.expandWorkflow(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.PutModel(wf); err != nil {
+		resp.Diagnostics.AddError("Update workflow failed", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// resourceWorkflowDelete deletes a DRP Workflow
-func resourceWorkflowDelete(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("[DEBUG] Deleting DRP Workflow: %s", d.Id())
-
-	_, err := c.session.DeleteModel("workflows", d.Id())
-	if err != nil {
-		return err
+func (r *workflowResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		return
 	}
-
-	d.SetId("")
-
-	return nil
+	var state workflowResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if _, err := r.client.session.DeleteModel("workflows", state.Name.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Delete workflow failed", err.Error())
+	}
 }

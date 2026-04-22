@@ -1,175 +1,208 @@
 package drpv4
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"strings"
-	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-// resourceParam is the Terraform resource for a param
-//
-//	resource "drp_param" "test" {
-//	  name = "test"
-//	  description = "test"
-//	  documentation = "test"
-//	  schema = {
-//		 type = "string"
-//	  }
-//	  secure = false
-//	}
-func resourceParam() *schema.Resource {
-	r := &schema.Resource{
-		Create: resourceParamCreate,
-		Read:   resourceParamRead,
-		Update: resourceParamUpdate,
-		Delete: resourceParamDelete,
+var _ resource.Resource = (*paramResource)(nil)
+var _ resource.ResourceWithImportState = (*paramResource)(nil)
 
-		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:        schema.TypeString,
-				Description: "Param name",
-				Required:    true,
-				ForceNew:    true,
-				Optional:    false,
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Description: "Param description",
-				ForceNew:    false,
-				Optional:    true,
-			},
-			"documentation": {
-				Type:        schema.TypeString,
-				Description: "Param documentation",
-				ForceNew:    false,
-				Optional:    true,
-			},
-			"schema": {
-				Type:        schema.TypeMap,
-				Description: "Param schema",
-				Default:     `{"type":"string"}`,
-				ForceNew:    false,
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
+type paramResource struct {
+	client *Config
+}
+
+func NewParamResource() resource.Resource {
+	return &paramResource{}
+}
+
+func (r *paramResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "drp_param"
+}
+
+func (r *paramResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Required:            true,
+				Description:         "Param name.",
+				MarkdownDescription: "Param name.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"secure": {
-				Type:        schema.TypeBool,
-				Description: "Param secure",
-				ForceNew:    false,
-				Optional:    true,
+			"description": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Param description.",
+				MarkdownDescription: "Param description.",
+			},
+			"documentation": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Param documentation.",
+				MarkdownDescription: "Param documentation.",
+			},
+			"schema": schema.MapAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "Param schema (defaults to type string).",
+				MarkdownDescription: "Param schema (defaults to type string).",
+			},
+			"secure": schema.BoolAttribute{
+				Optional:            true,
+				Description:         "Whether the param is secure.",
+				MarkdownDescription: "Whether the param is secure.",
 			},
 		},
-
-		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(5 * time.Minute),
-			Update: schema.DefaultTimeout(5 * time.Minute),
-			Delete: schema.DefaultTimeout(5 * time.Minute),
-		},
 	}
-
-	return r
 }
 
-// flattenParam converts a param object to a Terraform resource
-func flattenParam(d *schema.ResourceData, param *models.Param) error {
-	if err := d.Set("name", param.Name); err != nil {
-		return fmt.Errorf("error setting name: %s", err)
-	}
-	if err := d.Set("description", param.Description); err != nil {
-		return fmt.Errorf("error setting description: %s", err)
-	}
-	if err := d.Set("documentation", param.Documentation); err != nil {
-		return fmt.Errorf("error setting documentation: %s", err)
-	}
-	if err := d.Set("schema", param.Schema); err != nil {
-		return fmt.Errorf("error setting schema: %s", err)
-	}
-	if err := d.Set("secure", param.Secure); err != nil {
-		return fmt.Errorf("error setting secure: %s", err)
-	}
-
-	return nil
+func (r *paramResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.client = configureResourceClient(req, resp)
 }
 
-// expandParam converts a Terraform resource to a param object
-func expandParam(d *schema.ResourceData) *models.Param {
-	param := &models.Param{
-		Name:          d.Get("name").(string),
-		Description:   d.Get("description").(string),
-		Documentation: d.Get("documentation").(string),
-		Schema:        d.Get("schema").(map[string]interface{}),
-		Secure:        d.Get("secure").(bool),
-	}
-
-	return param
+type paramResourceModel struct {
+	Name          types.String `tfsdk:"name"`
+	Description   types.String `tfsdk:"description"`
+	Documentation types.String `tfsdk:"documentation"`
+	Schema        types.Map    `tfsdk:"schema"`
+	Secure        types.Bool   `tfsdk:"secure"`
 }
 
-func resourceParamCreate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("Creating param: %+v", d)
-
-	param := expandParam(d)
-
-	log.Printf("Creating param: %+v", param)
-
-	if err := c.session.CreateModel(param); err != nil {
-		return fmt.Errorf("error creating param: %s", err)
-	}
-
-	d.SetId(param.Key())
-
-	return resourceParamRead(d, m)
+func (r *paramResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
 }
 
-func resourceParamRead(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
+func (r *paramResource) expandParam(ctx context.Context, m *paramResourceModel, diags *diag.Diagnostics) *models.Param {
+	schemaVal := defaultParamSchema()
+	if !m.Schema.IsNull() && !m.Schema.IsUnknown() {
+		var sm map[string]string
+		diags.Append(m.Schema.ElementsAs(ctx, &sm, false)...)
+		if diags.HasError() {
+			return nil
+		}
+		schemaVal = stringMapToInterfaceMap(sm)
+	}
+	secure := false
+	if !m.Secure.IsNull() && !m.Secure.IsUnknown() {
+		secure = m.Secure.ValueBool()
+	}
+	return &models.Param{
+		Name:          m.Name.ValueString(),
+		Description:   m.Description.ValueString(),
+		Documentation: m.Documentation.ValueString(),
+		Schema:        schemaVal,
+		Secure:        secure,
+	}
+}
 
-	log.Printf("Reading param: %+v", d)
-
-	po, err := c.session.GetModel("params", d.Id())
-	if err != nil {
-		if strings.HasSuffix(err.Error(), "Not Found") {
-			d.SetId("")
-			return flattenParam(d, &models.Param{})
-		} else {
-			return fmt.Errorf("error reading param: %s", err)
+func (r *paramResource) flattenParam(ctx context.Context, p *models.Param, m *paramResourceModel, diags *diag.Diagnostics) {
+	m.Name = types.StringValue(p.Name)
+	m.Description = types.StringValue(p.Description)
+	m.Documentation = types.StringValue(p.Documentation)
+	var sm map[string]string
+	var err error
+	if p.Schema != nil {
+		if raw, ok := p.Schema.(map[string]interface{}); ok {
+			sm, err = interfaceMapToStringMap(raw)
+			if err != nil {
+				diags.AddError("Invalid param schema", err.Error())
+				return
+			}
 		}
 	}
-
-	return flattenParam(d, po.(*models.Param))
+	if len(sm) == 0 {
+		m.Schema = types.MapNull(types.StringType)
+	} else {
+		mv, d := types.MapValueFrom(ctx, types.StringType, sm)
+		diags.Append(d...)
+		m.Schema = mv
+	}
+	m.Secure = types.BoolValue(p.Secure)
 }
 
-func resourceParamUpdate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("Updating param: %+v", d)
-
-	param := expandParam(d)
-
-	if err := c.session.PutModel(param); err != nil {
-		return fmt.Errorf("error updating param: %s", err)
+func (r *paramResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		return
 	}
-
-	return resourceParamRead(d, m)
+	var plan paramResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	param := r.expandParam(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.CreateModel(param); err != nil {
+		resp.Diagnostics.AddError("Create param failed", err.Error())
+		return
+	}
+	r.flattenParam(ctx, param, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceParamDelete(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("Deleting param: %s", d.Id())
-
-	if _, err := c.session.DeleteModel("params", d.Id()); err != nil {
-		return fmt.Errorf("error deleting param: %s", err)
+func (r *paramResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		return
 	}
+	var state paramResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	po, err := r.client.session.GetModel("params", state.Name.ValueString())
+	if err != nil {
+		if strings.HasSuffix(err.Error(), "Not Found") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("Read param failed", err.Error())
+		return
+	}
+	r.flattenParam(ctx, po.(*models.Param), &state, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
 
-	d.SetId("")
+func (r *paramResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		return
+	}
+	var plan paramResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	param := r.expandParam(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.PutModel(param); err != nil {
+		resp.Diagnostics.AddError("Update param failed", err.Error())
+		return
+	}
+	r.flattenParam(ctx, param, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
 
-	return nil
+func (r *paramResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		return
+	}
+	var state paramResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if _, err := r.client.session.DeleteModel("params", state.Name.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Delete param failed", err.Error())
+	}
 }

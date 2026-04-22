@@ -1,252 +1,246 @@
 package drpv4
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"log"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-// resourceProfileParam represents a profile param in DRP system
-//
-//		resource "drp_profile_param" "profile_param" {
-//		 profile = "test"
-//		 name = "test"
-//		 value = "test"
-//	  	 secure_value = "test"
-//		}
-func resourceProfileParam() *schema.Resource {
-	r := &schema.Resource{
-		Create: resourceProfileParamCreate,
-		Read:   resourceProfileParamRead,
-		Update: resourceProfileParamUpdate,
-		Delete: resourceProfileParamDelete,
+var _ resource.Resource = (*profileParamResource)(nil)
+var _ resource.ResourceWithImportState = (*profileParamResource)(nil)
 
-		Schema: map[string]*schema.Schema{
-			"profile": {
-				Type:        schema.TypeString,
-				Description: "Profile name",
-				Required:    true,
-				ForceNew:    true,
+type profileParamResource struct {
+	client *Config
+}
+
+func NewProfileParamResource() resource.Resource {
+	return &profileParamResource{}
+}
+
+func (r *profileParamResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "drp_profile_param"
+}
+
+func (r *profileParamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"profile": schema.StringAttribute{
+				Required:            true,
+				Description:         "Profile name.",
+				MarkdownDescription: "Profile name.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"name": {
-				Type:        schema.TypeString,
-				Description: "Param name",
-				Required:    true,
-				ForceNew:    true,
+			"name": schema.StringAttribute{
+				Required:            true,
+				Description:         "Param name.",
+				MarkdownDescription: "Param name.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"value": {
-				Type:         schema.TypeString,
-				Description:  "Param value",
-				Optional:     true,
-				Sensitive:    false,
-				ExactlyOneOf: []string{"value", "secure_value"},
+			"value": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Param value (non-secure params).",
+				MarkdownDescription: "Param value (non-secure params).",
 			},
-			"secure_value": {
-				Type:        schema.TypeString,
-				Description: "Param secure value",
-				Optional:    true,
-				Sensitive:   true,
+			"secure_value": schema.StringAttribute{
+				Optional:            true,
+				Sensitive:           true,
+				Description:         "Secure param value (encrypted to profile).",
+				MarkdownDescription: "Secure param value (encrypted to profile).",
 			},
 		},
 	}
-
-	return r
 }
 
-// getParam return the param
-func getParam(c *Config, name string) (*models.Param, error) {
-	var p *models.Param
-
-	if err := c.session.Req().UrlFor("params", name).Do(&p); err != nil {
-		return nil, err
-	}
-
-	return p, nil
+func (r *profileParamResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.client = configureResourceClient(req, resp)
 }
 
-// getParamType returns the type of the parameter
-func getParamSchemaType(c *Config, name string) string {
-	param, err := getParam(c, name)
-	if err != nil {
-		return ""
-	}
-
-	if param.Schema == nil || param.Schema.(map[string]interface{})["type"] == nil {
-		return ""
-	}
-
-	s := param.Schema.(map[string]interface{})["type"].(string)
-
-	return s
+type profileParamResourceModel struct {
+	Profile     types.String `tfsdk:"profile"`
+	Name        types.String `tfsdk:"name"`
+	Value       types.String `tfsdk:"value"`
+	SecureValue types.String `tfsdk:"secure_value"`
 }
 
-// convertParamToType returns the value in the correct type
-func convertParamToType(c *Config, name string, value string) (interface{}, error) {
-	paramType := getParamSchemaType(c, name)
-
-	switch paramType {
-	case "string":
-		return value, nil
-	default:
-		var out interface{}
-		err := json.Unmarshal([]byte(value), &out)
-		if err != nil {
-			return value, nil
-		}
-		return out, nil
+func (r *profileParamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	parts := strings.SplitN(req.ID, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		resp.Diagnostics.AddError("Invalid import ID", "Expected format profile/name")
+		return
 	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("profile"), types.StringValue(parts[0]))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(parts[1]))...)
 }
 
-// convertParamToString returns the value in the correct type
-func convertParamToString(value interface{}) (string, error) {
-	switch value := value.(type) {
-	case string:
-		return value, nil
-	default:
-		out, err := json.Marshal(value)
-		return string(out), err
-	}
-}
+func (r *profileParamResource) upsert(ctx context.Context, m *profileParamResourceModel, diags *diag.Diagnostics) {
+	profile := m.Profile.ValueString()
+	name := m.Name.ValueString()
+	value := m.Value.ValueString()
+	secureValue := m.SecureValue.ValueString()
 
-// isParamSecure returns true if the param is secure
-func isParamSecure(c *Config, name string) bool {
-	res, err := c.session.GetModel("params", name)
-	if err != nil {
-		return false
+	if (value == "" && secureValue == "") || (value != "" && secureValue != "") {
+		diags.AddError(
+			"Invalid profile param",
+			"Exactly one of value or secure_value must be set.",
+		)
+		return
 	}
 
-	param := res.(*models.Param)
-
-	return param.Secure
-}
-
-// getPublickey returns the public key from DRP to use for encrypting secure params
-func getPublickey(c *Config, profile string) ([]byte, error) {
-	var pubkey []byte
-	if err := c.session.Req().UrlFor("profiles", profile, "pubkey").Do(&pubkey); err != nil {
-		return nil, err
+	if value != "" && isParamSecure(r.client, name) {
+		diags.AddError(
+			"Invalid profile param",
+			fmt.Sprintf("Param %s is secure; use secure_value instead.", name),
+		)
+		return
 	}
 
-	return pubkey, nil
-}
-
-// resourceProfileParamCreate creates a profile param in the DRP system
-func resourceProfileParamCreate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	profile := d.Get("profile").(string)
-	name := d.Get("name").(string)
-	value := d.Get("value").(string)
-	secureValue := d.Get("secure_value").(string)
-
-	log.Printf("Creating profile param %s", name)
-
-	if value != "" && isParamSecure(c, name) {
-		return fmt.Errorf("param %s is secure, use secure_value instead", name)
-	}
-
-	req := c.session.Req().UrlFor("profiles", profile, "params", name)
+	req := r.client.session.Req().UrlFor("profiles", profile, "params", name)
 
 	if secureValue != "" {
 		sv := &models.SecureData{}
-		pubkey, err := getPublickey(c, profile)
+		pubkey, err := getPublicKey(r.client, profile)
 		if err != nil {
-			return err
+			diags.AddError("Read profile pubkey failed", err.Error())
+			return
 		}
-
-		err = sv.Marshal(pubkey, secureValue)
-		if err != nil {
-			return err
+		if err := sv.Marshal(pubkey, secureValue); err != nil {
+			diags.AddError("Marshal secure value failed", err.Error())
+			return
 		}
-
 		if err := sv.Validate(); err != nil {
-			return err
+			diags.AddError("Validate secure value failed", err.Error())
+			return
 		}
-
 		if err := req.Post(sv).Do(nil); err != nil {
-			return err
+			diags.AddError("Set secure profile param failed", err.Error())
+			return
 		}
-	} else {
-		convertedValue, err := convertParamToType(c, name, value)
-		if err != nil {
-			return err
-		}
-
-		if err := req.Post(convertedValue).Do(nil); err != nil {
-			return err
-		}
+		return
 	}
 
-	d.SetId(fmt.Sprintf("%s/%s", profile, name))
-
-	return resourceProfileParamRead(d, m)
+	convertedValue, err := convertParamToType(r.client, name, value)
+	if err != nil {
+		diags.AddError("Convert param value failed", err.Error())
+		return
+	}
+	if err := req.Post(convertedValue).Do(nil); err != nil {
+		diags.AddError("Set profile param failed", err.Error())
+	}
 }
 
-// resourceProfileParamRead reads a profile param from the DRP system
-func resourceProfileParamRead(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	profile := d.Get("profile").(string)
-	name := d.Get("name").(string)
-	secureValue := d.Get("secure_value").(string)
-
-	log.Printf("Reading profile param %s", name)
+func (r *profileParamResource) readIntoModel(ctx context.Context, m *profileParamResourceModel, diags *diag.Diagnostics) {
+	profile := m.Profile.ValueString()
+	name := m.Name.ValueString()
+	secureValue := m.SecureValue.ValueString()
 
 	var p interface{}
-	if err := c.session.Req().UrlFor("profiles", profile, "params", name).Do(&p); err != nil {
+	if err := r.client.session.Req().UrlFor("profiles", profile, "params", name).Do(&p); err != nil {
 		if strings.HasSuffix(err.Error(), "Not Found") {
-			d.SetId("")
-			return nil
-		} else {
-			return err
+			m.Profile = types.StringNull()
+			m.Name = types.StringNull()
+			return
 		}
+		diags.AddError("Read profile param failed", err.Error())
+		return
 	}
 
-	d.Set("name", name)
-	d.Set("profile", profile)
+	m.Name = types.StringValue(name)
+	m.Profile = types.StringValue(profile)
 
 	if secureValue == "" {
-		value, err := convertParamToString(p)
+		s, err := convertParamToString(p)
 		if err != nil {
-			return err
+			diags.AddError("Convert param to string failed", err.Error())
+			return
 		}
-
-		d.Set("value", value)
-		d.Set("secure_value", nil)
-	} else {
-		d.Set("value", nil)
-
-		var securedValue string
-		if err := c.session.Req().UrlFor("profiles", profile, "params", name).Params("decode", "true").Do(&securedValue); err != nil {
-			return err
-		}
-		d.Set("secure_value", securedValue)
+		m.Value = types.StringValue(s)
+		m.SecureValue = types.StringNull()
+		return
 	}
 
-	return nil
-}
-
-// resourceProfileParamUpdate updates a profile param in the DRP system
-func resourceProfileParamUpdate(d *schema.ResourceData, m interface{}) error {
-	return resourceProfileParamCreate(d, m)
-}
-
-// resourceProfileParamDelete deletes a profile param from the DRP system
-func resourceProfileParamDelete(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	name := d.Get("name").(string)
-	profile := d.Get("profile").(string)
-
-	log.Printf("Deleting profile param %s", name)
-
-	if err := c.session.Req().Del().UrlFor("profiles", profile, "params", name).Do(nil); err != nil {
-		return err
+	m.Value = types.StringNull()
+	var securedValue string
+	if err := r.client.session.Req().UrlFor("profiles", profile, "params", name).Params("decode", "true").Do(&securedValue); err != nil {
+		diags.AddError("Read decoded secure param failed", err.Error())
+		return
 	}
+	m.SecureValue = types.StringValue(securedValue)
+}
 
-	return nil
+func (r *profileParamResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		return
+	}
+	var plan profileParamResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.upsert(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.readIntoModel(ctx, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (r *profileParamResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		return
+	}
+	var state profileParamResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.readIntoModel(ctx, &state, &resp.Diagnostics)
+	if state.Profile.IsNull() {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+func (r *profileParamResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		return
+	}
+	var plan profileParamResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.upsert(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	r.readIntoModel(ctx, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (r *profileParamResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		return
+	}
+	var state profileParamResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.Req().Del().UrlFor("profiles", state.Profile.ValueString(), "params", state.Name.ValueString()).Do(nil); err != nil {
+		resp.Diagnostics.AddError("Delete profile param failed", err.Error())
+	}
 }
