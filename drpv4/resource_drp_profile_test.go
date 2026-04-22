@@ -18,11 +18,17 @@ func TestAccResourceProfile(t *testing.T) {
 					resource "drp_profile" "%s" {
 						name = "%s"
 						description = "My new profile"
+						meta = {
+							icon  = "server"
+							color = "#1a73e8"
+						}
 					}
 				`, profileName, profileName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile.%s", profileName), "name", profileName),
 					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile.%s", profileName), "description", "My new profile"),
+					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile.%s", profileName), "meta.icon", "server"),
+					resource.TestCheckResourceAttr(fmt.Sprintf("drp_profile.%s", profileName), "meta.color", "#1a73e8"),
 				),
 			},
 		},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -44,6 +45,12 @@ func (r *profileResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Description:         "Profile description.",
 				MarkdownDescription: "Profile description.",
 			},
+			"meta": schema.MapAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "Profile metadata (arbitrary string key/value pairs, e.g. UX-related flags).",
+				MarkdownDescription: "Profile metadata (arbitrary string key/value pairs, e.g. UX-related flags).",
+			},
 		},
 	}
 }
@@ -55,6 +62,34 @@ func (r *profileResource) Configure(_ context.Context, req resource.ConfigureReq
 type profileResourceModel struct {
 	Name        types.String `tfsdk:"name"`
 	Description types.String `tfsdk:"description"`
+	Meta        types.Map    `tfsdk:"meta"`
+}
+
+func (r *profileResource) expandProfile(ctx context.Context, m *profileResourceModel, diags *diag.Diagnostics) *models.Profile {
+	profile := &models.Profile{
+		Name:        m.Name.ValueString(),
+		Description: m.Description.ValueString(),
+	}
+	if m.Meta.IsNull() || m.Meta.IsUnknown() {
+		return profile
+	}
+	var meta map[string]string
+	diags.Append(m.Meta.ElementsAs(ctx, &meta, false)...)
+	if diags.HasError() {
+		return nil
+	}
+	profile.Meta = models.Meta(meta)
+	return profile
+}
+
+func (r *profileResource) flattenProfile(ctx context.Context, p *models.Profile, m *profileResourceModel, diags *diag.Diagnostics) {
+	m.Name = types.StringValue(p.Name)
+	m.Description = mergeOptString(m.Description, p.Description)
+	var sm map[string]string
+	if p.Meta != nil {
+		sm = map[string]string(p.Meta)
+	}
+	m.Meta = mergeOptStringMap(ctx, m.Meta, sm, diags)
 }
 
 func (r *profileResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -70,14 +105,20 @@ func (r *profileResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	profile := &models.Profile{
-		Name:        plan.Name.ValueString(),
-		Description: plan.Description.ValueString(),
+	profile := r.expandProfile(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 	if err := r.client.session.CreateModel(profile); err != nil {
 		resp.Diagnostics.AddError("Create profile failed", err.Error())
 		return
 	}
+	res, err := r.client.session.GetModel("profiles", profile.Name)
+	if err != nil {
+		resp.Diagnostics.AddError("Read profile after create failed", err.Error())
+		return
+	}
+	r.flattenProfile(ctx, res.(*models.Profile), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -100,8 +141,7 @@ func (r *profileResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 	p := pr.(*models.Profile)
-	state.Name = types.StringValue(p.Name)
-	state.Description = types.StringValue(p.Description)
+	r.flattenProfile(ctx, p, &state, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -114,14 +154,20 @@ func (r *profileResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	profile := &models.Profile{
-		Name:        plan.Name.ValueString(),
-		Description: plan.Description.ValueString(),
+	profile := r.expandProfile(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 	if err := r.client.session.PutModel(profile); err != nil {
 		resp.Diagnostics.AddError("Update profile failed", err.Error())
 		return
 	}
+	res, err := r.client.session.GetModel("profiles", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read profile after update failed", err.Error())
+		return
+	}
+	r.flattenProfile(ctx, res.(*models.Profile), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
