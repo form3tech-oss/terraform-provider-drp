@@ -4,13 +4,13 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccResourceReservation(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		Providers: testAccProviders,
-		PreCheck:  func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{
 				Config: `
@@ -40,10 +40,10 @@ func TestAccResourceReservation(t *testing.T) {
 						token = "ff:70:81:a9:78:4d"
 						next_server = "192.168.1.1"
 
-						options {
-							code = 1
+						options = [{
+							code  = 1
 							value = "255.255.255.0"
-						}
+						}]
 					}
 				`,
 				Check: resource.ComposeTestCheckFunc(

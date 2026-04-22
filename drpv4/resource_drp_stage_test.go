@@ -4,13 +4,13 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccStageResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		Providers: testAccProviders,
-		PreCheck:  func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{
 				Config: `
@@ -20,7 +20,7 @@ func TestAccStageResource(t *testing.T) {
 						params = {
 							test = "test"
 						}
-						
+
 						optional_params = ["test"]
 						runner_wait = true
 					}`,
@@ -40,11 +40,11 @@ func TestAccStageResource(t *testing.T) {
 						params = {
 							test = "test"
 						}
-						
+
 						optional_params = ["test"]
 						runner_wait = true
-						
-						template {
+
+						template = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
@@ -52,7 +52,7 @@ func TestAccStageResource(t *testing.T) {
 							echo "test"
 							EOF
 							path = "/tmp/test"
-						}
+						}]
 					}`,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("drp_stage.test", "name", "test"),
@@ -74,10 +74,10 @@ func TestAccStageResource(t *testing.T) {
 						params = {
 							test = "test"
 						}
-						
+
 						runner_wait = true
-						
-						template {
+
+						template = [{
 							name = "test1"
 							contents = <<-EOF
 							#!/bin/bash
@@ -85,7 +85,7 @@ func TestAccStageResource(t *testing.T) {
 							echo "test"
 							EOF
 							path = "/tmp/test"
-						}
+						}]
 					}`,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("drp_stage.test", "name", "test"),
@@ -93,7 +93,7 @@ func TestAccStageResource(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_stage.test", "params.%", "1"),
 					resource.TestCheckResourceAttr("drp_stage.test", "params.test", "test"),
 					resource.TestCheckResourceAttr("drp_stage.test", "runner_wait", "true"),
-					resource.TestCheckTypeSetElemAttr("drp_stage.test", "optional_params.*", "0"),
+					resource.TestCheckResourceAttr("drp_stage.test", "optional_params.#", "0"),
 				),
 			},
 			{
@@ -104,7 +104,7 @@ func TestAccStageResource(t *testing.T) {
 						params = {
 							test = "test"
 						}
-						
+
 						optional_params = ["test"]
 						runner_wait = true
 					}`,

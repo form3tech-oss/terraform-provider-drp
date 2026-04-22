@@ -1,290 +1,359 @@
 package drpv4
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-// ResourceStage is the Schema for the stages API
-func resourceStage() *schema.Resource {
-	r := &schema.Resource{
-		Create: resourceStageCreate,
-		Read:   resourceStageRead,
-		Update: resourceStageUpdate,
-		Delete: resourceStageDelete,
+var _ resource.Resource = (*stageResource)(nil)
+var _ resource.ResourceWithImportState = (*stageResource)(nil)
 
-		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:        schema.TypeString,
-				Description: "Stage name",
-				ForceNew:    true,
-				Required:    true,
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Description: "Stage description",
-				Optional:    true,
-			},
-			"documentation": {
-				Type:        schema.TypeString,
-				Description: "Stage documentation",
-				Optional:    true,
-			},
-			"bootenv": {
-				Type:        schema.TypeString,
-				Description: "Stage bootenv",
-				Optional:    true,
-			},
-			"optional_params": {
-				Type:        schema.TypeList,
-				Description: "Stage optional params",
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"params": {
-				Type:        schema.TypeMap,
-				Description: "Stage params",
-				Optional:    true,
-			},
-			"profiles": {
-				Type:        schema.TypeList,
-				Description: "Stage profiles",
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"reboot": {
-				Type:        schema.TypeBool,
-				Description: "Stage reboot",
-				Optional:    true,
-			},
-			"required_params": {
-				Type:        schema.TypeList,
-				Description: "Stage required params",
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"runner_wait": {
-				Type:        schema.TypeBool,
-				Description: "Stage runner wait",
-				Optional:    true,
-				Computed:    true,
-			},
-			"tasks": {
-				Type:        schema.TypeList,
-				Description: "Stage tasks",
-				Optional:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"template": {
-				Type:        schema.TypeList,
-				Description: "Stage templates",
-				Optional:    true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
-							Type:        schema.TypeString,
-							Description: "Template name",
+type stageResource struct {
+	client *Config
+}
 
-							Required: true,
-						},
-						"contents": {
-							Type:        schema.TypeString,
-							Description: "Template content",
-							Optional:    true,
-						},
-						"path": {
-							Type:        schema.TypeString,
-							Description: "Template path",
-							Optional:    true,
-						},
-						"template_id": {
-							Type:        schema.TypeString,
-							Description: "Template ID",
-							Optional:    true,
-						},
-						"link": {
-							Type:        schema.TypeString,
-							Description: "Template link",
-							Optional:    true,
-						},
-						"meta": {
-							Type:        schema.TypeMap,
-							Description: "Template meta",
-							Optional:    true,
-							Elem: &schema.Schema{
-								Type: schema.TypeString,
-							},
-						},
-					},
+func NewStageResource() resource.Resource {
+	return &stageResource{}
+}
+
+func (r *stageResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "drp_stage"
+}
+
+func stageTemplateNestedAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"name":        schema.StringAttribute{Required: true, Description: "Template name."},
+		"contents":    schema.StringAttribute{Optional: true, Description: "Template content."},
+		"path":        schema.StringAttribute{Optional: true, Description: "Template path."},
+		"template_id": schema.StringAttribute{Optional: true, Description: "Template ID."},
+		"link":        schema.StringAttribute{Optional: true, Description: "Template link."},
+		"meta": schema.MapAttribute{
+			ElementType: types.StringType,
+			Optional:    true,
+			Description: "Template meta.",
+		},
+	}
+}
+
+func (r *stageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Required:            true,
+				Description:         "Stage name.",
+				MarkdownDescription: "Stage name.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"description":   schema.StringAttribute{Optional: true, Description: "Stage description."},
+			"documentation": schema.StringAttribute{Optional: true, Description: "Stage documentation."},
+			"bootenv":       schema.StringAttribute{Optional: true, Description: "Bootenv name."},
+			"optional_params": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Optional params.",
+			},
+			"params": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Stage params (string values).",
+			},
+			"profiles": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Profiles.",
+			},
+			"reboot": schema.BoolAttribute{Optional: true, Description: "Reboot flag."},
+			"required_params": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Required params.",
+			},
+			"runner_wait": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				Description:         "Runner wait (from DRP).",
+				MarkdownDescription: "Runner wait (from DRP).",
+			},
+			"tasks": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Tasks.",
+			},
+			"template": schema.ListNestedAttribute{
+				Optional:     true,
+				NestedObject: schema.NestedAttributeObject{Attributes: stageTemplateNestedAttributes()},
+				Description:  "Stage templates.",
 			},
 		},
 	}
-
-	return r
 }
 
-// flattenStage flattens a Stage from a Terraform ResourceData
-func flattenStage(d *schema.ResourceData, stage *models.Stage) error {
-	if err := d.Set("name", stage.Name); err != nil {
-		return fmt.Errorf("error setting name: %s", err)
-	}
-	if err := d.Set("description", stage.Description); err != nil {
-		return fmt.Errorf("error setting description: %s", err)
-	}
-	if err := d.Set("documentation", stage.Documentation); err != nil {
-		return fmt.Errorf("error setting documentation: %s", err)
-	}
-	if err := d.Set("bootenv", stage.BootEnv); err != nil {
-		return fmt.Errorf("error setting bootenv: %s", err)
-	}
-	if err := d.Set("optional_params", stage.OptionalParams); err != nil {
-		return fmt.Errorf("error setting optional_params: %s", err)
-	}
-	if err := d.Set("params", stage.Params); err != nil {
-		return fmt.Errorf("error setting params: %s", err)
-	}
-	if err := d.Set("profiles", stage.Profiles); err != nil {
-		return fmt.Errorf("error setting profiles: %s", err)
-	}
-	if err := d.Set("reboot", stage.Reboot); err != nil {
-		return fmt.Errorf("error setting reboot: %s", err)
-	}
-	if err := d.Set("required_params", stage.RequiredParams); err != nil {
-		return fmt.Errorf("error setting required_params: %s", err)
-	}
-	if err := d.Set("runner_wait", stage.RunnerWait); err != nil {
-		return fmt.Errorf("error setting runner_wait: %s", err)
-	}
-	if err := d.Set("tasks", stage.Tasks); err != nil {
-		return fmt.Errorf("error setting tasks: %s", err)
-	}
-	if err := d.Set("template", flattenTemplates(stage.Templates)); err != nil {
-		return fmt.Errorf("error setting template: %s", err)
-	}
-	return nil
+func (r *stageResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.client = configureResourceClient(req, resp)
 }
 
-// expandStageTemplates expands a list of Templates from a Terraform ResourceData
-func expandStageTemplates(templates interface{}) []models.TemplateInfo {
-	if templates == nil {
+type stageResourceModel struct {
+	Name           types.String `tfsdk:"name"`
+	Description    types.String `tfsdk:"description"`
+	Documentation  types.String `tfsdk:"documentation"`
+	BootEnv        types.String `tfsdk:"bootenv"`
+	OptionalParams types.List   `tfsdk:"optional_params"`
+	Params         types.Map    `tfsdk:"params"`
+	Profiles       types.List   `tfsdk:"profiles"`
+	Reboot         types.Bool   `tfsdk:"reboot"`
+	RequiredParams types.List   `tfsdk:"required_params"`
+	RunnerWait     types.Bool   `tfsdk:"runner_wait"`
+	Tasks          types.List   `tfsdk:"tasks"`
+	Template       types.List   `tfsdk:"template"`
+}
+
+func (r *stageResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+}
+
+func stageTemplateObjType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{
+		"name":        types.StringType,
+		"contents":    types.StringType,
+		"path":        types.StringType,
+		"template_id": types.StringType,
+		"link":        types.StringType,
+		"meta":        types.MapType{ElemType: types.StringType},
+	}}
+}
+
+func (r *stageResource) expandStageTemplates(ctx context.Context, l types.List, diags *diag.Diagnostics) []models.TemplateInfo {
+	if l.IsNull() || l.IsUnknown() {
 		return nil
 	}
+	els := l.Elements()
+	out := make([]models.TemplateInfo, 0, len(els))
+	for _, el := range els {
+		o, ok := el.(types.Object)
+		if !ok {
+			diags.AddError("Invalid template element", "expected object")
+			return nil
+		}
+		var meta map[string]string
+		mv := o.Attributes()["meta"]
+		if mv != nil && !mv.IsNull() {
+			if mmap, ok := mv.(types.Map); ok {
+				diags.Append(mmap.ElementsAs(ctx, &meta, false)...)
+			}
+		}
+		out = append(out, models.TemplateInfo{
+			Name:     objectAttrString(o, "name"),
+			Contents: objectAttrString(o, "contents"),
+			Path:     objectAttrString(o, "path"),
+			ID:       objectAttrString(o, "template_id"),
+			Link:     objectAttrString(o, "link"),
+			Meta:     meta,
+		})
+	}
+	return out
+}
 
-	t := make([]models.TemplateInfo, len(templates.([]interface{})))
-	for i, template := range templates.([]interface{}) {
-		tpl := template.(map[string]interface{})
+func (r *stageResource) expandStage(ctx context.Context, m *stageResourceModel, diags *diag.Diagnostics) *models.Stage {
+	reboot := false
+	if !m.Reboot.IsNull() && !m.Reboot.IsUnknown() {
+		reboot = m.Reboot.ValueBool()
+	}
+	runner := false
+	if !m.RunnerWait.IsNull() && !m.RunnerWait.IsUnknown() {
+		runner = m.RunnerWait.ValueBool()
+	}
+	var params map[string]interface{}
+	if !m.Params.IsNull() && !m.Params.IsUnknown() {
+		var sm map[string]string
+		diags.Append(m.Params.ElementsAs(ctx, &sm, false)...)
+		if diags.HasError() {
+			return nil
+		}
+		params = stringMapToInterfaceMap(sm)
+	}
+	return &models.Stage{
+		Name:           m.Name.ValueString(),
+		Description:    m.Description.ValueString(),
+		Documentation:  m.Documentation.ValueString(),
+		BootEnv:        m.BootEnv.ValueString(),
+		OptionalParams: diagListToStrings(ctx, m.OptionalParams, diags),
+		Params:         params,
+		Profiles:       diagListToStrings(ctx, m.Profiles, diags),
+		Reboot:         reboot,
+		RequiredParams: diagListToStrings(ctx, m.RequiredParams, diags),
+		RunnerWait:     runner,
+		Tasks:          diagListToStrings(ctx, m.Tasks, diags),
+		Templates:      r.expandStageTemplates(ctx, m.Template, diags),
+	}
+}
 
-		t[i] = models.TemplateInfo{
-			Name:     tpl["name"].(string),
-			Contents: tpl["contents"].(string),
-			Path:     tpl["path"].(string),
-			ID:       tpl["template_id"].(string),
-			Link:     tpl["link"].(string),
-			Meta:     expandMapInterface(tpl["meta"].(map[string]interface{})),
+func (r *stageResource) flattenStageTemplatesMerged(ctx context.Context, prior types.List, api []models.TemplateInfo, diags *diag.Diagnostics) types.List {
+	if len(api) == 0 {
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.ListNull(stageTemplateObjType())
+		}
+		return types.ListNull(stageTemplateObjType())
+	}
+	var priorObjs []types.Object
+	if !prior.IsNull() && !prior.IsUnknown() {
+		for _, el := range prior.Elements() {
+			if o, ok := el.(types.Object); ok {
+				priorObjs = append(priorObjs, o)
+			}
 		}
 	}
-
-	return t
-}
-
-// expandStage expands a Stage from a Terraform ResourceData
-func expandStage(d *schema.ResourceData) *models.Stage {
-	stage := &models.Stage{
-		Name:           d.Get("name").(string),
-		Description:    d.Get("description").(string),
-		Documentation:  d.Get("documentation").(string),
-		BootEnv:        d.Get("bootenv").(string),
-		OptionalParams: expandStringList(d.Get("optional_params")),
-		Params:         d.Get("params").(map[string]interface{}),
-		Profiles:       expandStringList(d.Get("profiles")),
-		Reboot:         d.Get("reboot").(bool),
-		RequiredParams: expandStringList(d.Get("required_params")),
-		RunnerWait:     d.Get("runner_wait").(bool),
-		Tasks:          expandStringList(d.Get("tasks")),
-		Templates:      expandStageTemplates(d.Get("template")),
+	tplObjs := make([]types.Object, 0, len(api))
+	for i, ti := range api {
+		pObj := types.ObjectNull(stageTemplateObjType().AttrTypes)
+		if i < len(priorObjs) {
+			pObj = priorObjs[i]
+		}
+		meta := ti.Meta
+		if meta == nil {
+			meta = map[string]string{}
+		}
+		metaVal := mergeOptStringMap(ctx, priorObjMap(pObj, "meta"), meta, diags)
+		attrs := map[string]attr.Value{
+			"name":        types.StringValue(ti.Name),
+			"contents":    mergeOptString(priorObjString(pObj, "contents"), ti.Contents),
+			"path":        mergeOptString(priorObjString(pObj, "path"), ti.Path),
+			"template_id": mergeOptString(priorObjString(pObj, "template_id"), ti.ID),
+			"link":        mergeOptString(priorObjString(pObj, "link"), ti.Link),
+			"meta":        metaVal,
+		}
+		obj, d := types.ObjectValue(stageTemplateObjType().AttrTypes, attrs)
+		diags.Append(d...)
+		tplObjs = append(tplObjs, obj)
 	}
-	return stage
-}
-
-// resourceStageCreate creates a new Stage
-func resourceStageCreate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	stage := expandStage(d)
-
-	log.Printf("[DEBUG] Stage create: %#v", stage)
-
-	if err := c.session.CreateModel(stage); err != nil {
-		return err
+	elems := make([]attr.Value, len(tplObjs))
+	for i, o := range tplObjs {
+		elems[i] = o
 	}
-
-	d.SetId(stage.Name)
-
-	return resourceStageRead(d, m)
+	return types.ListValueMust(stageTemplateObjType(), elems)
 }
 
-// resourceStageRead reads a Stage
-func resourceStageRead(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
+func (r *stageResource) flattenStage(ctx context.Context, s *models.Stage, m *stageResourceModel, diags *diag.Diagnostics) {
+	m.Name = types.StringValue(s.Name)
+	m.Description = mergeOptString(m.Description, s.Description)
+	m.Documentation = mergeOptString(m.Documentation, s.Documentation)
+	m.BootEnv = mergeOptString(m.BootEnv, s.BootEnv)
+	m.OptionalParams = mergeOptStringList(ctx, m.OptionalParams, s.OptionalParams, diags)
+	m.Profiles = mergeOptStringList(ctx, m.Profiles, s.Profiles, diags)
+	m.Reboot = mergeOptBool(m.Reboot, s.Reboot)
+	m.RequiredParams = mergeOptStringList(ctx, m.RequiredParams, s.RequiredParams, diags)
+	m.RunnerWait = mergeOptBool(m.RunnerWait, s.RunnerWait)
+	m.Tasks = mergeOptStringList(ctx, m.Tasks, s.Tasks, diags)
 
-	log.Printf("[DEBUG] Stage read: %s", d.Id())
+	var sm map[string]string
+	if s.Params != nil {
+		var err error
+		sm, err = interfaceMapToStringMap(s.Params)
+		if err != nil {
+			diags.AddError("Invalid stage params", err.Error())
+			return
+		}
+	}
+	m.Params = mergeOptStringMap(ctx, m.Params, sm, diags)
 
-	res, err := c.session.GetModel("stages", d.Id())
+	m.Template = r.flattenStageTemplatesMerged(ctx, m.Template, s.Templates, diags)
+}
+
+func (r *stageResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		return
+	}
+	var plan stageResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	stage := r.expandStage(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.CreateModel(stage); err != nil {
+		resp.Diagnostics.AddError("Create stage failed", err.Error())
+		return
+	}
+	res, err := r.client.session.GetModel("stages", stage.Name)
+	if err != nil {
+		resp.Diagnostics.AddError("Read stage after create failed", err.Error())
+		return
+	}
+	r.flattenStage(ctx, res.(*models.Stage), &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (r *stageResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		return
+	}
+	var state stageResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	res, err := r.client.session.GetModel("stages", state.Name.ValueString())
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "Not Found") {
-			d.SetId("")
-			return flattenStage(d, &models.Stage{})
-		} else {
-			return fmt.Errorf("error reading stage: %s", err)
+			resp.State.RemoveResource(ctx)
+			return
 		}
+		resp.Diagnostics.AddError("Read stage failed", err.Error())
+		return
 	}
-
-	log.Printf("[DEBUG] Stage read: %#v", res)
-
-	return flattenStage(d, res.(*models.Stage))
+	r.flattenStage(ctx, res.(*models.Stage), &state, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// resourceStageUpdate updates a Stage
-func resourceStageUpdate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	stage := expandStage(d)
-
-	log.Printf("[DEBUG] Stage update: %#v", stage)
-
-	err := c.session.PutModel(stage)
-	if err != nil {
-		return err
+func (r *stageResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		return
 	}
-
-	return resourceStageRead(d, m)
+	var plan stageResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	stage := r.expandStage(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.session.PutModel(stage); err != nil {
+		resp.Diagnostics.AddError("Update stage failed", err.Error())
+		return
+	}
+	res, err := r.client.session.GetModel("stages", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read stage after update failed", err.Error())
+		return
+	}
+	r.flattenStage(ctx, res.(*models.Stage), &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// resourceStageDelete deletes a Stage
-func resourceStageDelete(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	log.Printf("[DEBUG] Stage delete: %s", d.Id())
-
-	_, err := c.session.DeleteModel("stages", d.Id())
-	if err != nil {
-		return err
+func (r *stageResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		return
 	}
-
-	d.SetId("")
-
-	return nil
+	var state stageResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if _, err := r.client.session.DeleteModel("stages", state.Name.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Delete stage failed", err.Error())
+	}
 }

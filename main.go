@@ -1,16 +1,35 @@
 package main
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
+	"context"
+	"flag"
+	"log"
 
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"gitlab.com/rackn/terraform-provider-drpv4/drpv4"
 )
 
+// Set by goreleaser at link time.
+var (
+	version = "dev"
+	commit  = ""
+)
+
 func main() {
-	plugin.Serve(&plugin.ServeOpts{
-		ProviderFunc: func() *schema.Provider {
-			return drpv4.Provider()
-		},
-	})
+	var debug bool
+	flag.BoolVar(&debug, "debug", false, "set to true to run the provider with debug logging")
+	flag.Parse()
+
+	opts := providerserver.ServeOpts{
+		Debug: debug,
+	}
+
+	if debug {
+		log.Printf("terraform-provider-drp version=%s commit=%s", version, commit)
+	}
+
+	err := providerserver.Serve(context.Background(), drpv4.NewProvider(version), opts)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 }

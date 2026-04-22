@@ -4,21 +4,20 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-var testPoolRandomName = fmt.Sprintf("test-%s", randomString(10))
-
 func TestAccResourcePool(t *testing.T) {
+	name := fmt.Sprintf("tfpool_%s", accRandomSuffix(10))
 	resource.Test(t, resource.TestCase{
-		Providers: testAccProviders,
-		PreCheck:  func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
 					resource "drp_stage" "test" {
-						name = "%s"
-						template {
+						name = "%[1]s"
+						template = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
@@ -26,59 +25,59 @@ func TestAccResourcePool(t *testing.T) {
 							echo "test"
 							EOF
 							path = "/tmp/test"
-						}
+						}]
 					}
 
 					resource "drp_workflow" "test" {
-						name = "%s"
+						name = "%[1]s"
 						description = "test"
 						stages = [drp_stage.test.name]
 					}
 
 					resource "drp_pool" "test" {
-						pool_id = "%s"
+						pool_id = "%[1]s"
 						description = "test pool"
 						documentation = "test pool"
 
-						allocate_actions {
+						allocate_actions = [{
 							workflow = drp_workflow.test.name
-						}
+						}]
 
-						release_actions {
+						release_actions = [{
 							workflow = drp_workflow.test.name
-						}
+						}]
 
-						enter_actions {
+						enter_actions = [{
 							workflow = drp_workflow.test.name
-						}
+						}]
 
-						exit_actions {
+						exit_actions = [{
 							workflow = drp_workflow.test.name
-						}
+						}]
 
-						autofill {
+						autofill = [{
 							max_free = 1
-							
+
 							create_parameters = {
 								test = jsonencode({
 									type = "string"
 								})
 							}
-						}
+						}]
 					}
-				`, testPoolRandomName, testPoolRandomName, testPoolRandomName),
+				`, name),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("drp_pool.test", "pool_id", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "pool_id", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "description", "test pool"),
 					resource.TestCheckResourceAttr("drp_pool.test", "documentation", "test pool"),
 					resource.TestCheckResourceAttr("drp_pool.test", "allocate_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test", "allocate_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "allocate_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "release_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test", "release_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "release_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "enter_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test", "enter_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "enter_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "exit_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test", "exit_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "exit_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "autofill.#", "1"),
 					resource.TestCheckResourceAttr("drp_pool.test", "autofill.0.max_free", "1"),
 				),
@@ -87,8 +86,8 @@ func TestAccResourcePool(t *testing.T) {
 			{
 				Config: fmt.Sprintf(`
 					resource "drp_stage" "test" {
-						name = "%s"
-						template {
+						name = "%[1]s"
+						template = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
@@ -96,60 +95,60 @@ func TestAccResourcePool(t *testing.T) {
 							echo "test"
 							EOF
 							path = "/tmp/test"
-						}
+						}]
 					}
 
 					resource "drp_workflow" "test" {
-						name = "%s"
+						name = "%[1]s"
 						description = "test"
 						stages = [drp_stage.test.name]
 					}
 
 					resource "drp_pool" "test" {
-						pool_id = "%s"
+						pool_id = "%[1]s"
 						description = "test pool"
 						documentation = "test pool"
 
-						allocate_actions {
+						allocate_actions = [{
 							workflow = drp_workflow.test.name
 							remove_parameters = ["test"]
-						}
+						}]
 
-						release_actions {
+						release_actions = [{
 							workflow = drp_workflow.test.name
-						}
+						}]
 
-						enter_actions {
+						enter_actions = [{
 							workflow = drp_workflow.test.name
-						}
+						}]
 
-						exit_actions {
+						exit_actions = [{
 							workflow = drp_workflow.test.name
-						}
+						}]
 
-						autofill {
+						autofill = [{
 							max_free = 1
-							
+
 							create_parameters = {
 								test = jsonencode({
 									type = "string"
 								})
 							}
-						}
+						}]
 					}
-				`, testPoolRandomName, testPoolRandomName, testPoolRandomName),
+				`, name),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("drp_pool.test", "pool_id", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "pool_id", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "description", "test pool"),
 					resource.TestCheckResourceAttr("drp_pool.test", "documentation", "test pool"),
 					resource.TestCheckResourceAttr("drp_pool.test", "allocate_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test", "allocate_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "allocate_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "release_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test", "release_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "release_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "enter_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test", "enter_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "enter_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "exit_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test", "exit_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test", "exit_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test", "autofill.#", "1"),
 					resource.TestCheckResourceAttr("drp_pool.test", "autofill.0.max_free", "1"),
 				),
@@ -158,8 +157,8 @@ func TestAccResourcePool(t *testing.T) {
 			{
 				Config: fmt.Sprintf(`
 					resource "drp_stage" "test" {
-						name = "%s"
-						template {
+						name = "%[1]s"
+						template = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
@@ -167,39 +166,39 @@ func TestAccResourcePool(t *testing.T) {
 							echo "test"
 							EOF
 							path = "/tmp/test"
-						}
+						}]
 					}
 
 					resource "drp_workflow" "test" {
-						name = "%s"
+						name = "%[1]s"
 						description = "test"
 						stages = [drp_stage.test.name]
 					}
 
 					resource "drp_pool" "test-param" {
-						pool_id = "%s-param"
+						pool_id = "%[1]s-param"
 						description = "test pool"
 						documentation = "test pool"
 
-						allocate_actions {
+						allocate_actions = [{
 							workflow = drp_workflow.test.name
 							remove_parameters = ["test"]
 							add_parameters = {
 								"universal/application" = "image-deploy"
 							}
-						}
+						}]
 
-						release_actions {
+						release_actions = [{
 							workflow = drp_workflow.test.name
 							add_parameters = {
 								"universal/application" = "hw-only"
 							}
-						}
+						}]
 					}
-				`, testPoolRandomName, testPoolRandomName, testPoolRandomName),
+				`, name),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.#", "1"),
-					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.0.workflow", testPoolRandomName),
+					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.0.workflow", name),
 					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.0.add_parameters.%", "1"),
 					resource.TestCheckResourceAttr("drp_pool.test-param", `allocate_actions.0.add_parameters.universal/application`, "image-deploy"),
 					resource.TestCheckResourceAttr("drp_pool.test-param", "release_actions.#", "1"),
@@ -211,42 +210,42 @@ func TestAccResourcePool(t *testing.T) {
 			{
 				Config: fmt.Sprintf(`
 					resource "drp_param" "test-param" {
-						name   = "%s-test"
-  						secure = false
-  						schema = {
-    						type = "boolean"
-  						}
+						name   = "%[1]s-test"
+						secure = false
+						schema = {
+							type = "boolean"
+						}
 					}
 
 					resource "drp_pool" "test-param" {
-						pool_id = "%s-param"
+						pool_id = "%[1]s-param"
 						description = "test pool"
 						documentation = "test pool"
 
-						allocate_actions {
+						allocate_actions = [{
 							workflow = "universal-hardware"
 							add_parameters = {
 								"universal/application" = "image-deploy"
-								"%s-test" = true
+								"%[1]s-test" = true
 							}
-						}
+						}]
 
-						release_actions {
+						release_actions = [{
 							workflow = "universal-discover"
 							add_parameters = {
 								"universal/application" = "discover"
-								"%s-test" = false
+								"%[1]s-test" = false
 							}
-						}
+						}]
 					}
-				`, testPoolRandomName, testPoolRandomName, testPoolRandomName, testPoolRandomName),
+				`, name),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.#", "1"),
 					resource.TestCheckResourceAttr("drp_pool.test-param", "allocate_actions.0.add_parameters.%", "2"),
-					resource.TestCheckResourceAttr("drp_pool.test-param", fmt.Sprintf(`allocate_actions.0.add_parameters.%s-test`, testPoolRandomName), "true"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", fmt.Sprintf(`allocate_actions.0.add_parameters.%s-test`, name), "true"),
 					resource.TestCheckResourceAttr("drp_pool.test-param", "release_actions.#", "1"),
 					resource.TestCheckResourceAttr("drp_pool.test-param", "release_actions.0.add_parameters.%", "2"),
-					resource.TestCheckResourceAttr("drp_pool.test-param", fmt.Sprintf(`release_actions.0.add_parameters.%s-test`, testPoolRandomName), "false"),
+					resource.TestCheckResourceAttr("drp_pool.test-param", fmt.Sprintf(`release_actions.0.add_parameters.%s-test`, name), "false"),
 				),
 				ExpectNonEmptyPlan: false,
 			},

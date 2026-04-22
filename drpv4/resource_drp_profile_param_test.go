@@ -5,16 +5,15 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-var profileParamName = fmt.Sprintf("test-%s", randomString(10))
-
 func TestAccResourceProfileParam(t *testing.T) {
-
+	suffix := accRandomSuffix(10)
+	profileParamName := fmt.Sprintf("tfpp_%s", suffix)
 	resource.Test(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
@@ -23,7 +22,7 @@ func TestAccResourceProfileParam(t *testing.T) {
 						name = "test1"
 					}
 				`, profileParamName),
-				ExpectError: regexp.MustCompile("Invalid combination of arguments"),
+				ExpectError: regexp.MustCompile("Invalid Attribute Combination|Missing Attribute Configuration"),
 			},
 			{
 				Config: fmt.Sprintf(`
@@ -221,7 +220,7 @@ func TestAccResourceProfileParam(t *testing.T) {
 						value = "test2"
 					}
 				`, profileParamName, profileParamName, profileParamName),
-				ExpectError: regexp.MustCompile("param my_password is secure, use secure_value instead"),
+				ExpectError: regexp.MustCompile(`Param my_password is secure; use secure_value instead`),
 			},
 		},
 	})

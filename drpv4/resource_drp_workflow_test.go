@@ -4,21 +4,20 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-var testWorkflowRandomName = fmt.Sprintf("test-%s", randomString(10))
-
 func TestAccWorkflowResource(t *testing.T) {
+	name := fmt.Sprintf("tfstage_%s", accRandomSuffix(10))
 	resource.Test(t, resource.TestCase{
-		Providers: testAccProviders,
-		PreCheck:  func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
 					resource "drp_stage" "test" {
-						name = "%s"
-						template {
+						name = "%[1]s"
+						template = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
@@ -26,27 +25,27 @@ func TestAccWorkflowResource(t *testing.T) {
 							echo "test"
 							EOF
 							path = "/tmp/test"
-						}
+						}]
 					}
 
 					resource "drp_workflow" "test" {
-						name = "%s"
+						name = "%[1]s"
 						description = "test"
 						stages = [drp_stage.test.name]
 					}
-				`, testWorkflowRandomName, testWorkflowRandomName),
+				`, name),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("drp_workflow.test", "name", testWorkflowRandomName),
+					resource.TestCheckResourceAttr("drp_workflow.test", "name", name),
 					resource.TestCheckResourceAttr("drp_workflow.test", "description", "test"),
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.#", "1"),
-					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", testWorkflowRandomName),
+					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", name),
 				),
 			},
 			{
 				Config: fmt.Sprintf(`
 					resource "drp_stage" "test" {
-						name = "%s"
-						template {
+						name = "%[1]s"
+						template = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
@@ -54,26 +53,26 @@ func TestAccWorkflowResource(t *testing.T) {
 							echo "test"
 							EOF
 							path = "/tmp/test"
-						}
+						}]
 					}
 
 					resource "drp_workflow" "test" {
-						name = "%s"
+						name = "%[1]s"
 						description = "test1"
 						stages = [drp_stage.test.name]
-					}`, testWorkflowRandomName, testWorkflowRandomName),
+					}`, name),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("drp_workflow.test", "name", testWorkflowRandomName),
+					resource.TestCheckResourceAttr("drp_workflow.test", "name", name),
 					resource.TestCheckResourceAttr("drp_workflow.test", "description", "test1"),
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.#", "1"),
-					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", testWorkflowRandomName),
+					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", name),
 				),
 			},
 			{
 				Config: fmt.Sprintf(`
 					resource "drp_stage" "test" {
-						name = "%s"
-						template {
+						name = "%[1]s"
+						template = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
@@ -81,19 +80,19 @@ func TestAccWorkflowResource(t *testing.T) {
 							echo "test"
 							EOF
 							path = "/tmp/test"
-						}
+						}]
 					}
 
 					resource "drp_workflow" "test" {
-						name = "%s-1"
+						name = "%[1]s-1"
 						description = "test"
 						stages = [drp_stage.test.name]
-					}`, testWorkflowRandomName, testWorkflowRandomName),
+					}`, name),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("drp_workflow.test", "name", fmt.Sprintf("%s-1", testWorkflowRandomName)),
+					resource.TestCheckResourceAttr("drp_workflow.test", "name", fmt.Sprintf("%s-1", name)),
 					resource.TestCheckResourceAttr("drp_workflow.test", "description", "test"),
 					resource.TestCheckResourceAttr("drp_workflow.test", "stages.#", "1"),
-					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", testWorkflowRandomName),
+					resource.TestCheckResourceAttr("drp_workflow.test", "stages.0", name),
 				),
 			},
 		},

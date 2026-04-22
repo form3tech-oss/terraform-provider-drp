@@ -1,177 +1,207 @@
 package drpv4
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"strings"
-	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-type TemplateResult struct {
-	Template *models.Template
+var _ resource.Resource = (*templateResource)(nil)
+var _ resource.ResourceWithImportState = (*templateResource)(nil)
 
+type templateResource struct {
+	client *Config
+}
+
+type templatePutResult struct {
+	Template  *models.Template
 	Available bool
 	Errors    []string
 }
 
-func resourceTemplate() *schema.Resource {
-	r := &schema.Resource{
-		Create: resourceTemplateCreate,
-		Read:   resourceTemplateRead,
-		Update: resourceTemplateUpdate,
-		Delete: resourceTemplateDelete,
-
-		Schema: map[string]*schema.Schema{
-			"template_id": {
-				Type:        schema.TypeString,
-				Description: "Template id",
-				Required:    true,
-				ForceNew:    true,
-				Optional:    false,
-			},
-			"description": {
-				Type:        schema.TypeString,
-				Description: "Template description",
-				ForceNew:    false,
-				Optional:    true,
-			},
-			"contents": {
-				Type:        schema.TypeString,
-				Description: "Template contents",
-				ForceNew:    false,
-				Optional:    true,
-			},
-			"start_delimiter": {
-				Type:        schema.TypeString,
-				Description: "Template start delimiter",
-				ForceNew:    false,
-				Optional:    true,
-			},
-			"end_delimiter": {
-				Type:        schema.TypeString,
-				Description: "Template end delimiter",
-				ForceNew:    false,
-				Optional:    true,
-			},
-		},
-
-		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(5 * time.Minute),
-			Read:   schema.DefaultTimeout(5 * time.Minute),
-			Update: schema.DefaultTimeout(5 * time.Minute),
-			Delete: schema.DefaultTimeout(5 * time.Minute),
-		},
-	}
-
-	return r
+func NewTemplateResource() resource.Resource {
+	return &templateResource{}
 }
 
-func resourceTemplateCreate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
+func (r *templateResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "drp_template"
+}
+
+func (r *templateResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"template_id": schema.StringAttribute{
+				Required:            true,
+				Description:         "Template id.",
+				MarkdownDescription: "Template id.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"description": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Template description.",
+				MarkdownDescription: "Template description.",
+			},
+			"contents": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Template contents.",
+				MarkdownDescription: "Template contents.",
+			},
+			"start_delimiter": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Template start delimiter.",
+				MarkdownDescription: "Template start delimiter.",
+			},
+			"end_delimiter": schema.StringAttribute{
+				Optional:            true,
+				Description:         "Template end delimiter.",
+				MarkdownDescription: "Template end delimiter.",
+			},
+		},
+	}
+}
+
+func (r *templateResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.client = configureResourceClient(req, resp)
+}
+
+type templateResourceModel struct {
+	TemplateID     types.String `tfsdk:"template_id"`
+	Description    types.String `tfsdk:"description"`
+	Contents       types.String `tfsdk:"contents"`
+	StartDelimiter types.String `tfsdk:"start_delimiter"`
+	EndDelimiter   types.String `tfsdk:"end_delimiter"`
+}
+
+func (r *templateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("template_id"), req, resp)
+}
+
+func (r *templateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		return
+	}
+	var plan templateResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	template := models.Template{
-		ID:             d.Get("template_id").(string),
-		Description:    d.Get("description").(string),
-		Contents:       d.Get("contents").(string),
-		StartDelimiter: d.Get("start_delimiter").(string),
-		EndDelimiter:   d.Get("end_delimiter").(string),
+		ID:             plan.TemplateID.ValueString(),
+		Description:    plan.Description.ValueString(),
+		Contents:       plan.Contents.ValueString(),
+		StartDelimiter: plan.StartDelimiter.ValueString(),
+		EndDelimiter:   plan.EndDelimiter.ValueString(),
 	}
-
 	template.Validate()
 	if template.Error() != "" {
-		return fmt.Errorf("template validation failed: %v", template.Error())
+		resp.Diagnostics.AddError("Template validation failed", template.Error())
+		return
 	}
 
-	d.SetId(d.Get("template_id").(string))
-
-	log.Printf("Creating template %s", d.Id())
-
-	req := c.session.Req().Post(template).UrlFor("templates")
-	if err := req.Do(&template); err != nil {
-		return fmt.Errorf("error creating template: %s", err)
+	reqAPI := r.client.session.Req().Post(template).UrlFor("templates")
+	if err := reqAPI.Do(&template); err != nil {
+		resp.Diagnostics.AddError("Create template failed", err.Error())
+		return
 	}
-
 	if template.Error() != "" {
-		return fmt.Errorf("error creating template: %v", template.Error())
+		resp.Diagnostics.AddError("Create template failed", template.Error())
+		return
 	}
 
-	return nil
+	r.flattenTemplate(ctx, &template, &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceTemplateRead(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	to, err := c.session.GetModel("templates", d.Id())
+func (r *templateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		return
+	}
+	var state templateResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	to, err := r.client.session.GetModel("templates", state.TemplateID.ValueString())
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "Not Found") {
-			d.SetId("")
-			return nil
-		} else {
-			return fmt.Errorf("error reading template: %s", err)
+			resp.State.RemoveResource(ctx)
+			return
 		}
+		resp.Diagnostics.AddError("Read template failed", err.Error())
+		return
 	}
-
-	templateObject := to.(*models.Template)
-
-	if err := d.Set("template_id", templateObject.ID); err != nil {
-		return fmt.Errorf("error setting template ID: %s", err)
-	}
-
-	if err := d.Set("description", templateObject.Description); err != nil {
-		return fmt.Errorf("error setting template description: %s", err)
-	}
-
-	if err := d.Set("contents", templateObject.Contents); err != nil {
-		return fmt.Errorf("error setting template contents: %s", err)
-	}
-
-	if err := d.Set("start_delimiter", templateObject.StartDelimiter); err != nil {
-		return fmt.Errorf("error setting template start delimiter: %s", err)
-	}
-
-	if err := d.Set("end_delimiter", templateObject.EndDelimiter); err != nil {
-		return fmt.Errorf("error setting template end delimiter: %s", err)
-	}
-
-	return nil
+	r.flattenTemplate(ctx, to.(*models.Template), &state, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func resourceTemplateUpdate(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
+func (r *templateResource) flattenTemplate(_ context.Context, t *models.Template, m *templateResourceModel, _ *diag.Diagnostics) {
+	m.TemplateID = types.StringValue(t.ID)
+	m.Description = types.StringValue(t.Description)
+	m.Contents = types.StringValue(t.Contents)
+	m.StartDelimiter = types.StringValue(t.StartDelimiter)
+	m.EndDelimiter = types.StringValue(t.EndDelimiter)
+}
 
-	var templateResult TemplateResult
-	template := models.Template{
-		ID:             d.Get("template_id").(string),
-		Description:    d.Get("description").(string),
-		Contents:       d.Get("contents").(string),
-		StartDelimiter: d.Get("start_delimiter").(string),
-		EndDelimiter:   d.Get("end_delimiter").(string),
+func (r *templateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		return
+	}
+	var plan templateResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
+	template := models.Template{
+		ID:             plan.TemplateID.ValueString(),
+		Description:    plan.Description.ValueString(),
+		Contents:       plan.Contents.ValueString(),
+		StartDelimiter: plan.StartDelimiter.ValueString(),
+		EndDelimiter:   plan.EndDelimiter.ValueString(),
+	}
 	template.Validate()
 	if template.Error() != "" {
-		return fmt.Errorf("template validation failed: %v", template.Error())
+		resp.Diagnostics.AddError("Template validation failed", template.Error())
+		return
 	}
 
-	req := c.session.Req().Put(template).UrlFor("templates", d.Id())
-	if err := req.Do(&templateResult); err != nil {
-		return fmt.Errorf("error updating template: %s", err)
+	var putResult templatePutResult
+	reqAPI := r.client.session.Req().Put(template).UrlFor("templates", plan.TemplateID.ValueString())
+	if err := reqAPI.Do(&putResult); err != nil {
+		resp.Diagnostics.AddError("Update template failed", err.Error())
+		return
 	}
 
-	return nil
+	to, err := r.client.session.GetModel("templates", plan.TemplateID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read template after update failed", err.Error())
+		return
+	}
+	r.flattenTemplate(ctx, to.(*models.Template), &plan, &resp.Diagnostics)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceTemplateDelete(d *schema.ResourceData, m interface{}) error {
-	c := m.(*Config)
-
-	_, err := c.session.DeleteModel("templates", d.Id())
-	if err != nil {
-		return fmt.Errorf("error deleting template: %s", err)
+func (r *templateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		return
 	}
-	d.SetId("")
-
-	return nil
+	var state templateResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if _, err := r.client.session.DeleteModel("templates", state.TemplateID.ValueString()); err != nil {
+		resp.Diagnostics.AddError("Delete template failed", err.Error())
+	}
 }

@@ -7,160 +7,171 @@ package drpv4
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-/*
- * Enable terraform to use DRP as a provider.  Fill out the
- * appropriate functions and information about this plugin.
- */
-func Provider() *schema.Provider {
-	return &schema.Provider{
+type fwProvider struct {
+	version string
+}
 
-		ResourcesMap: map[string]*schema.Resource{
-			"drp_machine":          resourceMachine(),
-			"drp_machine_set_pool": resourceMachinePool(),
-			"drp_param":            resourceParam(),
-			"drp_template":         resourceTemplate(),
-			"drp_task":             resourceTask(),
-			"drp_stage":            resourceStage(),
-			"drp_workflow":         resourceWorkflow(),
-			"drp_subnet":           resourceSubnet(),
-			"drp_reservation":      resourceReservation(),
-			"drp_pool":             resourcePool(),
-			"drp_profile":          resourceProfile(),
-			"drp_profile_param":    resourceProfileParam(),
-		},
+type providerModel struct {
+	Token    types.String `tfsdk:"token"`
+	Key      types.String `tfsdk:"key"`
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
+	Endpoint types.String `tfsdk:"endpoint"`
+}
 
-		// note yet, but potentially pools, params and profiles
-		DataSourcesMap: map[string]*schema.Resource{},
-
-		Schema: map[string]*schema.Schema{
-			"token": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Granted DRP token (use instead of RS_KEY)",
-				DefaultFunc: schema.MultiEnvDefaultFunc([]string{
-					"RS_TOKEN",
-				}, nil),
-				ConflictsWith: []string{"key", "password"},
-			},
-			"key": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "The DRP user:password key",
-				DefaultFunc: schema.MultiEnvDefaultFunc([]string{
-					"RS_KEY",
-				}, nil),
-				ConflictsWith: []string{"token"},
-			},
-			"username": {
-				Type:          schema.TypeString,
-				Optional:      true,
-				Description:   "The DRP user",
-				ConflictsWith: []string{"key"},
-			},
-			"password": {
-				Type:          schema.TypeString,
-				Optional:      true,
-				Description:   "The DRP password",
-				ConflictsWith: []string{"key", "token"},
-			},
-			"endpoint": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "The DRP server URL. ie: https://1.2.3.4:8092",
-				DefaultFunc: schema.MultiEnvDefaultFunc([]string{
-					"RS_ENDPOINT",
-				}, nil),
-			},
-		},
-
-		ConfigureContextFunc: providerConfigure,
+func NewProvider(version string) func() provider.Provider {
+	return func() provider.Provider {
+		return &fwProvider{version: version}
 	}
 }
 
-/*
- * The config method that terraform uses to pass information about configuration
- * to the plugin.
- */
-func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-	log.Println("[DEBUG] Configuring the DRP provider")
-	config := Config{
-		endpoint: d.Get("endpoint").(string),
-		username: d.Get("username").(string),
-		password: d.Get("password").(string),
-	}
-	var diags diag.Diagnostics
+func (p *fwProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "drp"
+	resp.Version = p.version
+}
 
-	if token := d.Get("token"); token != nil {
-		config.token = token.(string)
+func (p *fwProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"token": schema.StringAttribute{
+				Optional:            true,
+				Sensitive:           true,
+				Description:         "Granted DRP token (use instead of RS_KEY)",
+				MarkdownDescription: "Granted DRP token (use instead of RS_KEY)",
+			},
+			"key": schema.StringAttribute{
+				Optional:            true,
+				Sensitive:           true,
+				Description:         "The DRP user:password key",
+				MarkdownDescription: "The DRP user:password key",
+			},
+			"username": schema.StringAttribute{
+				Optional:            true,
+				Description:         "The DRP user",
+				MarkdownDescription: "The DRP user",
+			},
+			"password": schema.StringAttribute{
+				Optional:            true,
+				Sensitive:           true,
+				Description:         "The DRP password",
+				MarkdownDescription: "The DRP password",
+			},
+			"endpoint": schema.StringAttribute{
+				Optional:            true,
+				Description:         "The DRP server URL, for example https://1.2.3.4:8092",
+				MarkdownDescription: "The DRP server URL, for example https://1.2.3.4:8092",
+			},
+		},
 	}
-	if key := d.Get("key"); key != "" {
-		parts := strings.SplitN(key.(string), ":", 2)
+}
+
+func (p *fwProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data providerModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	token := data.Token.ValueString()
+	if token == "" {
+		token = os.Getenv("RS_TOKEN")
+	}
+	key := data.Key.ValueString()
+	if key == "" {
+		key = os.Getenv("RS_KEY")
+	}
+	username := data.Username.ValueString()
+	password := data.Password.ValueString()
+	endpoint := data.Endpoint.ValueString()
+	if endpoint == "" {
+		endpoint = os.Getenv("RS_ENDPOINT")
+	}
+
+	if key != "" {
+		parts := strings.SplitN(key, ":", 2)
 		if len(parts) < 2 {
-			diags = append(diags, diag.Diagnostic{
-				Severity: diag.Error,
-				Summary:  "Malformed DRP Credential",
-				Detail:   fmt.Sprint("RS_KEY has not enough parts: ", key),
-			})
-			return nil, diags
+			resp.Diagnostics.AddError("Malformed key", "While configuring the provider, the key attribute is malformed.")
+			return
 		}
-		config.username = parts[0]
-		config.password = parts[1]
+		username = parts[0]
+		password = parts[1]
 	}
 
-	if config.token == "" && config.username == "" {
-		diags = append(diags, diag.Diagnostic{
-			Severity: diag.Error,
-			Summary:  "Missing DRP Credential",
-			Detail:   "drp provider requires username/password, credential, or token",
-		})
-		return nil, diags
-	}
-	if config.username != "" && config.password == "" {
-		diags = append(diags, diag.Diagnostic{
-			Severity: diag.Error,
-			Summary:  "Missing DRP Password",
-			Detail:   "drp provider requires a password for the specified user",
-		})
-		return nil, diags
+	if token != "" && key != "" {
+		resp.Diagnostics.AddError("Conflicting credentials", "token cannot be set together with key.")
+		return
 	}
 
-	log.Printf("[DEBUG] Attempting to connect with credentials %+v", config)
-	if err := config.validateAndConnect(); err != nil {
-		return nil, diag.FromErr(err)
+	cfg := &Config{
+		token:    token,
+		username: username,
+		password: password,
+		endpoint: endpoint,
 	}
 
-	info, err := config.session.Info()
+	if cfg.endpoint == "" {
+		resp.Diagnostics.AddError(
+			"Missing DRP Endpoint",
+			"No DRP endpoint was specified; set the endpoint attribute or RS_ENDPOINT.",
+		)
+		return
+	}
+	if cfg.token == "" && cfg.username == "" {
+		resp.Diagnostics.AddError(
+			"Malformed DRP credentials",
+			"The key, token, or username/password attributes must be provided.",
+		)
+		return
+	}
+	if cfg.username != "" && cfg.password == "" {
+		resp.Diagnostics.AddError("Missing DRP password", "A password is required for the specified user.")
+		return
+	}
+
+	tflog.Debug(ctx, "Attempting to connect to DRP", map[string]interface{}{"endpoint": cfg.endpoint})
+	if err := cfg.validateAndConnect(ctx); err != nil {
+		resp.Diagnostics.AddError("Failed to create DRP client", err.Error())
+		return
+	}
+
+	info, err := cfg.session.Info()
 	if err != nil {
-		diags = append(diags, diag.Diagnostic{
-			Severity: diag.Error,
-			Summary:  "Failed to Connect",
-			Detail:   fmt.Sprint("Failed to fetch info for ", config.endpoint),
-		})
-		return nil, diags
-	}
-	has_pool := false
-	for _, f := range info.Features {
-		if f == "embedded-pool" {
-			has_pool = true
-		}
-	}
-	if !has_pool {
-		diags = append(diags, diag.Diagnostic{
-			Severity: diag.Error,
-			Summary:  "Insufficient DRP Version",
-			Detail:   fmt.Sprint("Pooling feature required.  Upgrade to v4.4 from ", info.Version),
-		})
-		return nil, diags
+		resp.Diagnostics.AddError("Failed to Connect", fmt.Sprintf("Failed to fetch info for %s", cfg.endpoint))
+		return
 	}
 
-	log.Printf("[Info] Digital Rebar %+v", info.Version)
+	tflog.Info(ctx, fmt.Sprintf("Digital Rebar %v (features: %v)", info.Version, info.Features))
+	resp.ResourceData = cfg
+}
 
-	return &config, diags
+func (p *fwProvider) Resources(_ context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		NewMachineResource,
+		NewMachineSetPoolResource,
+		NewParamResource,
+		NewTemplateResource,
+		NewTaskResource,
+		NewStageResource,
+		NewWorkflowResource,
+		NewSubnetResource,
+		NewReservationResource,
+		NewPoolResource,
+		NewProfileResource,
+		NewProfileParamResource,
+	}
+}
+
+func (p *fwProvider) DataSources(_ context.Context) []func() datasource.DataSource {
+	return nil
 }

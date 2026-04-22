@@ -3,13 +3,13 @@ package drpv4
 import (
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccTaskResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		Providers: testAccProviders,
-		PreCheck:  func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{
 				Config: `
@@ -19,20 +19,20 @@ func TestAccTaskResource(t *testing.T) {
 						required_params = ["test"]
 						optional_params = ["test1"]
 
-						templates {
+						templates = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
 							echo "test"
 							EOF
 							path = "/test.sh"
-						}
+						}]
 
-						extra_claims {
+						extra_claims = [{
 							scope = "*"
 							action = "*"
 							specific = "*"
-						}
+						}]
 					}
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -50,20 +50,20 @@ func TestAccTaskResource(t *testing.T) {
 						required_params = ["test"]
 						optional_params = ["test1"]
 
-						templates {
+						templates = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
 							echo "test1"
 							EOF
 							path = "/test.sh"
-						}
+						}]
 
-						extra_claims {
+						extra_claims = [{
 							scope = "*"
 							action = "*"
 							specific = "*"
-						}
+						}]
 					}
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -75,7 +75,6 @@ func TestAccTaskResource(t *testing.T) {
 					resource.TestCheckResourceAttr("drp_task.test", "templates.0.name", "test"),
 					resource.TestCheckResourceAttr("drp_task.test", "templates.0.contents", "#!/bin/bash\necho \"test1\"\n"),
 				),
-				// ExpectNonEmptyPlan: true,
 			},
 			{
 				Config: `
@@ -85,20 +84,20 @@ func TestAccTaskResource(t *testing.T) {
 						required_params = ["test","test2"]
 						optional_params = ["test1"]
 
-						templates {
+						templates = [{
 							name = "test"
 							contents = <<-EOF
 							#!/bin/bash
 							echo "test"
 							EOF
 							path = "/test.sh"
-						}
+						}]
 
-						extra_claims {
+						extra_claims = [{
 							scope = "*"
 							action = "*"
 							specific = "*"
-						}
+						}]
 					}
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
