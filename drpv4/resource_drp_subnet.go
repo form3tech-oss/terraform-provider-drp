@@ -190,7 +190,10 @@ func (r *subnetResource) expandSubnet(ctx context.Context, m *subnetResourceMode
 	}
 }
 
-func (r *subnetResource) flattenSubnetOptions(ctx context.Context, opts []models.DhcpOption, diags *diag.Diagnostics) types.List {
+func (r *subnetResource) flattenSubnetOptionsMerged(ctx context.Context, prior types.List, opts []models.DhcpOption, diags *diag.Diagnostics) types.List {
+	if prior.IsNull() || prior.IsUnknown() {
+		return types.ListNull(dhcpOptionObjType())
+	}
 	if len(opts) == 0 {
 		return types.ListNull(dhcpOptionObjType())
 	}
@@ -209,25 +212,25 @@ func (r *subnetResource) flattenSubnetOptions(ctx context.Context, opts []models
 
 func (r *subnetResource) flattenSubnet(ctx context.Context, s *models.Subnet, m *subnetResourceModel, diags *diag.Diagnostics) {
 	m.Name = types.StringValue(s.Name)
-	m.Description = types.StringValue(s.Description)
-	m.Documentation = types.StringValue(s.Documentation)
-	m.Enabled = types.BoolValue(s.Enabled)
+	m.Description = mergeOptString(m.Description, s.Description)
+	m.Documentation = mergeOptString(m.Documentation, s.Documentation)
+	m.Enabled = mergeOptBool(m.Enabled, s.Enabled)
 	m.Subnet = types.StringValue(s.Subnet)
 	m.ActiveStart = types.StringValue(s.ActiveStart.String())
 	m.ActiveEnd = types.StringValue(s.ActiveEnd.String())
-	m.ActiveLeaseTime = types.Int64Value(int64(s.ActiveLeaseTime))
+	m.ActiveLeaseTime = mergeOptInt64(m.ActiveLeaseTime, int64(s.ActiveLeaseTime))
 	if s.NextServer != nil {
 		m.NextServer = types.StringValue(s.NextServer.String())
 	} else {
-		m.NextServer = types.StringNull()
+		m.NextServer = mergeOptString(m.NextServer, "")
 	}
-	m.OnlyReservations = types.BoolValue(s.OnlyReservations)
-	m.Options = r.flattenSubnetOptions(ctx, s.Options, diags)
-	m.Pickers = mustListStrings(ctx, s.Pickers, diags)
-	m.Proxy = types.BoolValue(s.Proxy)
-	m.ReservedLeaseTime = types.Int64Value(int64(s.ReservedLeaseTime))
-	m.Strategy = types.StringValue(s.Strategy)
-	m.Unmanaged = types.BoolValue(s.Unmanaged)
+	m.OnlyReservations = mergeOptBool(m.OnlyReservations, s.OnlyReservations)
+	m.Options = r.flattenSubnetOptionsMerged(ctx, m.Options, s.Options, diags)
+	m.Pickers = mergeOptStringList(ctx, m.Pickers, s.Pickers, diags)
+	m.Proxy = mergeOptBool(m.Proxy, s.Proxy)
+	m.ReservedLeaseTime = mergeOptInt64(m.ReservedLeaseTime, int64(s.ReservedLeaseTime))
+	m.Strategy = mergeOptString(m.Strategy, s.Strategy)
+	m.Unmanaged = mergeOptBool(m.Unmanaged, s.Unmanaged)
 }
 
 func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -247,7 +250,12 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError("Create subnet failed", err.Error())
 		return
 	}
-	r.flattenSubnet(ctx, sub, &plan, &resp.Diagnostics)
+	got, err := r.client.session.GetModel("subnets", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read subnet after create failed", err.Error())
+		return
+	}
+	r.flattenSubnet(ctx, got.(*models.Subnet), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -290,7 +298,12 @@ func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 		resp.Diagnostics.AddError("Update subnet failed", err.Error())
 		return
 	}
-	r.flattenSubnet(ctx, sub, &plan, &resp.Diagnostics)
+	got, err := r.client.session.GetModel("subnets", plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read subnet after update failed", err.Error())
+		return
+	}
+	r.flattenSubnet(ctx, got.(*models.Subnet), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

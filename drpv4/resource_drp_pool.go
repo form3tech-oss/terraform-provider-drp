@@ -262,9 +262,15 @@ func (r *poolResource) expandPool(ctx context.Context, m *poolResourceModel, dia
 	}
 }
 
-func (r *poolResource) flattenPoolActions(ctx context.Context, actions *models.PoolTransitionActions, diags *diag.Diagnostics) types.List {
+func (r *poolResource) flattenPoolActionsMerged(ctx context.Context, prior types.List, actions *models.PoolTransitionActions, diags *diag.Diagnostics) types.List {
 	if actions == nil {
 		return types.ListNull(poolActionObjType())
+	}
+	priorO := types.ObjectNull(poolActionObjType().AttrTypes)
+	if !prior.IsNull() && !prior.IsUnknown() && len(prior.Elements()) > 0 {
+		if o, ok := prior.Elements()[0].(types.Object); ok {
+			priorO = o
+		}
 	}
 	addParams := map[string]string{}
 	for k, v := range actions.AddParameters {
@@ -275,54 +281,52 @@ func (r *poolResource) flattenPoolActions(ctx context.Context, actions *models.P
 		}
 		addParams[k] = s
 	}
-	apMap, d := types.MapValueFrom(ctx, types.StringType, addParams)
-	diags.Append(d...)
-	apl, d := types.ListValueFrom(ctx, types.StringType, actions.AddProfiles)
-	diags.Append(d...)
-	rpl, d := types.ListValueFrom(ctx, types.StringType, actions.RemoveParameters)
-	diags.Append(d...)
-	rpr, d := types.ListValueFrom(ctx, types.StringType, actions.RemoveProfiles)
-	diags.Append(d...)
+	apMap := mergeOptStringMap(ctx, priorObjMap(priorO, "add_parameters"), addParams, diags)
+	apl := mergeOptStringList(ctx, priorObjList(priorO, "add_profiles"), actions.AddProfiles, diags)
+	rpl := mergeOptStringList(ctx, priorObjList(priorO, "remove_parameters"), actions.RemoveParameters, diags)
+	rpr := mergeOptStringList(ctx, priorObjList(priorO, "remove_profiles"), actions.RemoveProfiles, diags)
+	wf := mergeOptString(priorObjString(priorO, "workflow"), actions.Workflow)
 	attrs := map[string]attr.Value{
 		"add_parameters":    apMap,
 		"add_profiles":      apl,
 		"remove_parameters": rpl,
 		"remove_profiles":   rpr,
-		"workflow":          types.StringValue(actions.Workflow),
+		"workflow":          wf,
 	}
 	obj, d := types.ObjectValue(poolActionObjType().AttrTypes, attrs)
 	diags.Append(d...)
 	return types.ListValueMust(poolActionObjType(), []attr.Value{obj})
 }
 
-func (r *poolResource) flattenPoolAutofill(ctx context.Context, af *models.PoolAutoFill, diags *diag.Diagnostics) types.List {
+func (r *poolResource) flattenPoolAutofillMerged(ctx context.Context, prior types.List, af *models.PoolAutoFill, diags *diag.Diagnostics) types.List {
 	if af == nil {
 		return types.ListNull(autofillObjType())
 	}
-	var cp types.Map
+	priorO := types.ObjectNull(autofillObjType().AttrTypes)
+	if !prior.IsNull() && !prior.IsUnknown() && len(prior.Elements()) > 0 {
+		if o, ok := prior.Elements()[0].(types.Object); ok {
+			priorO = o
+		}
+	}
+	addParams := map[string]string{}
 	if af.CreateParameters != nil {
-		sm := make(map[string]string)
 		for k, v := range af.CreateParameters {
 			s, err := convertParamToString(v)
 			if err != nil {
 				diags.AddError("Flatten autofill create_parameters", err.Error())
 				return types.ListNull(autofillObjType())
 			}
-			sm[k] = s
+			addParams[k] = s
 		}
-		mv, d := types.MapValueFrom(ctx, types.StringType, sm)
-		diags.Append(d...)
-		cp = mv
-	} else {
-		cp = types.MapNull(types.StringType)
 	}
+	cp := mergeOptStringMap(ctx, priorObjMap(priorO, "create_parameters"), addParams, diags)
 	attrs := map[string]attr.Value{
-		"acquire_pool":      types.StringValue(af.AcquirePool),
+		"acquire_pool":      mergeOptString(priorObjString(priorO, "acquire_pool"), af.AcquirePool),
 		"create_parameters": cp,
-		"max_free":          types.Int64Value(int64(af.MaxFree)),
-		"min_free":          types.Int64Value(int64(af.MinFree)),
-		"return_pool":       types.StringValue(af.ReturnPool),
-		"use_autofill":      types.BoolValue(af.UseAutoFill),
+		"max_free":          mergeOptInt64(priorObjInt64(priorO, "max_free"), int64(af.MaxFree)),
+		"min_free":          mergeOptInt64(priorObjInt64(priorO, "min_free"), int64(af.MinFree)),
+		"return_pool":       mergeOptString(priorObjString(priorO, "return_pool"), af.ReturnPool),
+		"use_autofill":      mergeOptBool(priorObjBool(priorO, "use_autofill"), af.UseAutoFill),
 	}
 	obj, d := types.ObjectValue(autofillObjType().AttrTypes, attrs)
 	diags.Append(d...)
@@ -331,14 +335,14 @@ func (r *poolResource) flattenPoolAutofill(ctx context.Context, af *models.PoolA
 
 func (r *poolResource) flattenPool(ctx context.Context, p *models.Pool, m *poolResourceModel, diags *diag.Diagnostics) {
 	m.PoolID = types.StringValue(p.Id)
-	m.Description = types.StringValue(p.Description)
-	m.Documentation = types.StringValue(p.Documentation)
-	m.ParentPool = types.StringValue(p.ParentPool)
-	m.AllocateActions = r.flattenPoolActions(ctx, p.AllocateActions, diags)
-	m.ReleaseActions = r.flattenPoolActions(ctx, p.ReleaseActions, diags)
-	m.EnterActions = r.flattenPoolActions(ctx, p.EnterActions, diags)
-	m.ExitActions = r.flattenPoolActions(ctx, p.ExitActions, diags)
-	m.Autofill = r.flattenPoolAutofill(ctx, p.AutoFill, diags)
+	m.Description = mergeOptString(m.Description, p.Description)
+	m.Documentation = mergeOptString(m.Documentation, p.Documentation)
+	m.ParentPool = mergeOptString(m.ParentPool, p.ParentPool)
+	m.AllocateActions = r.flattenPoolActionsMerged(ctx, m.AllocateActions, p.AllocateActions, diags)
+	m.ReleaseActions = r.flattenPoolActionsMerged(ctx, m.ReleaseActions, p.ReleaseActions, diags)
+	m.EnterActions = r.flattenPoolActionsMerged(ctx, m.EnterActions, p.EnterActions, diags)
+	m.ExitActions = r.flattenPoolActionsMerged(ctx, m.ExitActions, p.ExitActions, diags)
+	m.Autofill = r.flattenPoolAutofillMerged(ctx, m.Autofill, p.AutoFill, diags)
 }
 
 func (r *poolResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -358,7 +362,12 @@ func (r *poolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		resp.Diagnostics.AddError("Create pool failed", err.Error())
 		return
 	}
-	r.flattenPool(ctx, pool, &plan, &resp.Diagnostics)
+	got, err := r.client.session.GetModel("pools", plan.PoolID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read pool after create failed", err.Error())
+		return
+	}
+	r.flattenPool(ctx, got.(*models.Pool), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -401,7 +410,12 @@ func (r *poolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		resp.Diagnostics.AddError("Update pool failed", err.Error())
 		return
 	}
-	r.flattenPool(ctx, pool, &plan, &resp.Diagnostics)
+	got, err := r.client.session.GetModel("pools", plan.PoolID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read pool after update failed", err.Error())
+		return
+	}
+	r.flattenPool(ctx, got.(*models.Pool), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

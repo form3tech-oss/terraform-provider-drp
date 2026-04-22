@@ -28,6 +28,12 @@ func providerData(cfg any, diags *diag.Diagnostics) *Config {
 }
 
 func configureResourceClient(req resource.ConfigureRequest, resp *resource.ConfigureResponse) *Config {
+	// ValidateResourceConfig invokes Resource.Configure before ConfigureProvider has run in the
+	// same graph walk, so ProviderData may still be nil. Skip wiring the API client until a
+	// later Configure call (e.g. plan/apply) when the provider has finished configuring.
+	if req.ProviderData == nil {
+		return nil
+	}
 	return providerData(req.ProviderData, &resp.Diagnostics)
 }
 

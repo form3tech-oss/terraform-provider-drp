@@ -132,7 +132,10 @@ func (r *reservationResource) expandReservation(ctx context.Context, m *reservat
 	return res
 }
 
-func (r *reservationResource) flattenReservationOptions(ctx context.Context, opts []models.DhcpOption, diags *diag.Diagnostics) types.List {
+func (r *reservationResource) flattenReservationOptionsMerged(ctx context.Context, prior types.List, opts []models.DhcpOption, diags *diag.Diagnostics) types.List {
+	if prior.IsNull() || prior.IsUnknown() {
+		return types.ListNull(dhcpOptionObjType())
+	}
 	if len(opts) == 0 {
 		return types.ListNull(dhcpOptionObjType())
 	}
@@ -150,19 +153,19 @@ func (r *reservationResource) flattenReservationOptions(ctx context.Context, opt
 }
 
 func (r *reservationResource) flattenReservation(ctx context.Context, res *models.Reservation, m *reservationResourceModel, diags *diag.Diagnostics) {
-	m.Description = types.StringValue(res.Description)
-	m.Documentation = types.StringValue(res.Documentation)
+	m.Description = mergeOptString(m.Description, res.Description)
+	m.Documentation = mergeOptString(m.Documentation, res.Documentation)
 	m.Address = types.StringValue(res.Addr.String())
-	m.Duration = types.Int64Value(int64(res.Duration))
+	m.Duration = mergeOptInt64(m.Duration, int64(res.Duration))
 	if res.NextServer != nil {
 		m.NextServer = types.StringValue(res.NextServer.String())
 	} else {
-		m.NextServer = types.StringNull()
+		m.NextServer = mergeOptString(m.NextServer, "")
 	}
-	m.Scoped = types.BoolValue(res.Scoped)
-	m.Strategy = types.StringValue(res.Strategy)
+	m.Scoped = mergeOptBool(m.Scoped, res.Scoped)
+	m.Strategy = mergeOptString(m.Strategy, res.Strategy)
 	m.Token = types.StringValue(res.Token)
-	m.Options = r.flattenReservationOptions(ctx, res.Options, diags)
+	m.Options = r.flattenReservationOptionsMerged(ctx, m.Options, res.Options, diags)
 }
 
 func (r *reservationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -182,7 +185,12 @@ func (r *reservationResource) Create(ctx context.Context, req resource.CreateReq
 		resp.Diagnostics.AddError("Create reservation failed", err.Error())
 		return
 	}
-	r.flattenReservation(ctx, res, &plan, &resp.Diagnostics)
+	got, err := r.client.session.GetModel("reservations", plan.Address.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read reservation after create failed", err.Error())
+		return
+	}
+	r.flattenReservation(ctx, got.(*models.Reservation), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -225,7 +233,12 @@ func (r *reservationResource) Update(ctx context.Context, req resource.UpdateReq
 		resp.Diagnostics.AddError("Update reservation failed", err.Error())
 		return
 	}
-	r.flattenReservation(ctx, res, &plan, &resp.Diagnostics)
+	got, err := r.client.session.GetModel("reservations", plan.Address.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Read reservation after update failed", err.Error())
+		return
+	}
+	r.flattenReservation(ctx, got.(*models.Reservation), &plan, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

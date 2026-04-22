@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,8 +16,11 @@ import (
 	"gitlab.com/rackn/provision/v4/models"
 )
 
-var _ resource.Resource = (*profileParamResource)(nil)
-var _ resource.ResourceWithImportState = (*profileParamResource)(nil)
+var (
+	_ resource.Resource                     = (*profileParamResource)(nil)
+	_ resource.ResourceWithImportState      = (*profileParamResource)(nil)
+	_ resource.ResourceWithConfigValidators = (*profileParamResource)(nil)
+)
 
 type profileParamResource struct {
 	client *Config
@@ -28,6 +32,15 @@ func NewProfileParamResource() resource.Resource {
 
 func (r *profileParamResource) Metadata(_ context.Context, _ resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = "drp_profile_param"
+}
+
+func (r *profileParamResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		resourcevalidator.ExactlyOneOf(
+			path.MatchRoot("value"),
+			path.MatchRoot("secure_value"),
+		),
+	}
 }
 
 func (r *profileParamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
