@@ -1,15 +1,15 @@
 module gitlab.com/rackn/terraform-provider-drpv4
 
-go 1.25.0
+go 1.26.4
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-log v0.10.0
-	github.com/hashicorp/terraform-plugin-testing v1.11.0
-	gitlab.com/rackn/jp v0.10.0
-	gitlab.com/rackn/provision/v4 v4.16.9
+	github.com/hashicorp/terraform-plugin-testing v1.16.0
+	gitlab.com/rackn/jp v0.10.1
+	gitlab.com/rackn/provision/v4 v4.16.10
 )
 
 require (
