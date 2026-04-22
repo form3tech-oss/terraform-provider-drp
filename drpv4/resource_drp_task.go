@@ -144,7 +144,7 @@ func claimType() types.ObjectType {
 func (r *taskResource) expandTask(ctx context.Context, m *taskResourceModel, diags *diag.Diagnostics) *models.Task {
 	task := models.Task{
 		Name:           m.Name.ValueString(),
-		Description:    m.Description.ValueString(),
+		DocData:        newDocData(m.Description.ValueString(), ""),
 		RequiredParams: diagListToStrings(ctx, m.RequiredParams, diags),
 		OptionalParams: diagListToStrings(ctx, m.OptionalParams, diags),
 		ExtraRoles:     diagListToStrings(ctx, m.ExtraRoles, diags),

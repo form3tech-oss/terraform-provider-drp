@@ -115,13 +115,12 @@ func (r *reservationResource) expandReservation(ctx context.Context, m *reservat
 		duration = int32(m.Duration.ValueInt64())
 	}
 	res := &models.Reservation{
-		Description:   m.Description.ValueString(),
-		Documentation: m.Documentation.ValueString(),
-		Addr:          net.ParseIP(m.Address.ValueString()),
-		Duration:      duration,
-		Strategy:      m.Strategy.ValueString(),
-		Token:         m.Token.ValueString(),
-		Options:       r.expandReservationOptions(ctx, m.Options, diags),
+		DocData:  newDocData(m.Description.ValueString(), m.Documentation.ValueString()),
+		Addr:     net.ParseIP(m.Address.ValueString()),
+		Duration: duration,
+		Strategy: m.Strategy.ValueString(),
+		Token:    m.Token.ValueString(),
+		Options:  r.expandReservationOptions(ctx, m.Options, diags),
 	}
 	if !m.Scoped.IsNull() && !m.Scoped.IsUnknown() {
 		res.Scoped = m.Scoped.ValueBool()

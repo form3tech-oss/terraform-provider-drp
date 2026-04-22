@@ -96,11 +96,10 @@ func (r *paramResource) expandParam(ctx context.Context, m *paramResourceModel, 
 		secure = m.Secure.ValueBool()
 	}
 	return &models.Param{
-		Name:          m.Name.ValueString(),
-		Description:   m.Description.ValueString(),
-		Documentation: m.Documentation.ValueString(),
-		Schema:        schemaVal,
-		Secure:        secure,
+		Name:    m.Name.ValueString(),
+		DocData: newDocData(m.Description.ValueString(), m.Documentation.ValueString()),
+		Schema:  schemaVal,
+		Secure:  secure,
 	}
 }
 

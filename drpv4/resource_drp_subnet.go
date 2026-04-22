@@ -172,8 +172,7 @@ func (r *subnetResource) expandSubnet(ctx context.Context, m *subnetResourceMode
 	}
 	return &models.Subnet{
 		Name:              m.Name.ValueString(),
-		Description:       m.Description.ValueString(),
-		Documentation:     m.Documentation.ValueString(),
+		DocData:           newDocData(m.Description.ValueString(), m.Documentation.ValueString()),
 		Enabled:           enabled,
 		Subnet:            m.Subnet.ValueString(),
 		ActiveStart:       net.ParseIP(m.ActiveStart.ValueString()),

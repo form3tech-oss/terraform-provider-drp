@@ -97,8 +97,10 @@ func (r *templateResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	template := models.Template{
-		ID:             plan.TemplateID.ValueString(),
-		Description:    plan.Description.ValueString(),
+		ID: plan.TemplateID.ValueString(),
+		DescData: models.DescData{
+			Description: plan.Description.ValueString(),
+		},
 		Contents:       plan.Contents.ValueString(),
 		StartDelimiter: plan.StartDelimiter.ValueString(),
 		EndDelimiter:   plan.EndDelimiter.ValueString(),
@@ -164,8 +166,10 @@ func (r *templateResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	template := models.Template{
-		ID:             plan.TemplateID.ValueString(),
-		Description:    plan.Description.ValueString(),
+		ID: plan.TemplateID.ValueString(),
+		DescData: models.DescData{
+			Description: plan.Description.ValueString(),
+		},
 		Contents:       plan.Contents.ValueString(),
 		StartDelimiter: plan.StartDelimiter.ValueString(),
 		EndDelimiter:   plan.EndDelimiter.ValueString(),

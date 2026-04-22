@@ -67,8 +67,8 @@ type profileResourceModel struct {
 
 func (r *profileResource) expandProfile(ctx context.Context, m *profileResourceModel, diags *diag.Diagnostics) *models.Profile {
 	profile := &models.Profile{
-		Name:        m.Name.ValueString(),
-		Description: m.Description.ValueString(),
+		Name:    m.Name.ValueString(),
+		DocData: newDocData(m.Description.ValueString(), ""),
 	}
 	if m.Meta.IsNull() || m.Meta.IsUnknown() {
 		return profile
