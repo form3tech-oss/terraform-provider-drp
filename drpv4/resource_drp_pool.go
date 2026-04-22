@@ -251,8 +251,7 @@ func (r *poolResource) expandPoolAutofill(ctx context.Context, l types.List, dia
 func (r *poolResource) expandPool(ctx context.Context, m *poolResourceModel, diags *diag.Diagnostics) *models.Pool {
 	return &models.Pool{
 		Id:              m.PoolID.ValueString(),
-		Description:     m.Description.ValueString(),
-		Documentation:   m.Documentation.ValueString(),
+		DocData:         newDocData(m.Description.ValueString(), m.Documentation.ValueString()),
 		ParentPool:      m.ParentPool.ValueString(),
 		AllocateActions: r.expandPoolActions(ctx, m.AllocateActions, diags),
 		ReleaseActions:  r.expandPoolActions(ctx, m.ReleaseActions, diags),

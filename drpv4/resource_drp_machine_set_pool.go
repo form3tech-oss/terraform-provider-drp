@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/VictorLowther/jsonpatch2"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -17,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"gitlab.com/rackn/jp"
 	"gitlab.com/rackn/provision/v4/models"
 )
 
@@ -108,7 +108,13 @@ func (r *machineSetPoolResource) Create(ctx context.Context, req resource.Create
 	plan.Address = types.StringValue(machineObject.Address.String())
 
 	if machineObject.Pool != pool {
-		patch := jsonpatch2.Patch{{Op: "replace", Path: "/Pool", Value: pool}}
+		var patcher jp.Patcher
+		patcher.Replace(jp.Ptr("/Pool"), pool)
+		patch, err := patcher.Patch()
+		if err != nil {
+			resp.Diagnostics.AddError("Set pool failed", fmt.Sprintf("build patch: %s", err))
+			return
+		}
 		reqm := r.client.session.Req().Patch(patch).UrlFor("machines", machineObject.Uuid.String())
 		mr := models.Machine{}
 		if err := reqm.Do(&mr); err != nil {
@@ -178,7 +184,13 @@ func (r *machineSetPoolResource) Delete(ctx context.Context, req resource.Delete
 		return
 	}
 
-	patch := jsonpatch2.Patch{{Op: "replace", Path: "/Pool", Value: "default"}}
+	var patcher jp.Patcher
+	patcher.Replace(jp.Ptr("/Pool"), "default")
+	patch, err := patcher.Patch()
+	if err != nil {
+		resp.Diagnostics.AddError("Delete failed", fmt.Sprintf("build patch: %s", err))
+		return
+	}
 	reqm := r.client.session.Req().Patch(patch).UrlFor("machines", uuid)
 	mr := models.Machine{}
 	if err := reqm.Do(&mr); err != nil {

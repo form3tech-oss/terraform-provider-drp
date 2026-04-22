@@ -78,10 +78,9 @@ func (r *workflowResource) ImportState(ctx context.Context, req resource.ImportS
 func (r *workflowResource) expandWorkflow(ctx context.Context, m *workflowResourceModel, diags *diag.Diagnostics) *models.Workflow {
 	stages := diagListToStrings(ctx, m.Stages, diags)
 	return &models.Workflow{
-		Name:          m.Name.ValueString(),
-		Description:   m.Description.ValueString(),
-		Documentation: m.Documentation.ValueString(),
-		Stages:        stages,
+		Name:    m.Name.ValueString(),
+		DocData: newDocData(m.Description.ValueString(), m.Documentation.ValueString()),
+		Stages:  stages,
 	}
 }
 

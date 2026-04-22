@@ -184,13 +184,16 @@ func (r *stageResource) expandStage(ctx context.Context, m *stageResourceModel, 
 		params = stringMapToInterfaceMap(sm)
 	}
 	return &models.Stage{
-		Name:           m.Name.ValueString(),
-		Description:    m.Description.ValueString(),
-		Documentation:  m.Documentation.ValueString(),
+		Name:    m.Name.ValueString(),
+		DocData: newDocData(m.Description.ValueString(), m.Documentation.ValueString()),
+		ParamData: models.ParamData{
+			Params: params,
+		},
+		ProfileData: models.ProfileData{
+			Profiles: diagListToStrings(ctx, m.Profiles, diags),
+		},
 		BootEnv:        m.BootEnv.ValueString(),
 		OptionalParams: diagListToStrings(ctx, m.OptionalParams, diags),
-		Params:         params,
-		Profiles:       diagListToStrings(ctx, m.Profiles, diags),
 		Reboot:         reboot,
 		RequiredParams: diagListToStrings(ctx, m.RequiredParams, diags),
 		RunnerWait:     runner,

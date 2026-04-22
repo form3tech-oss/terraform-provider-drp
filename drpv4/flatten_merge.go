@@ -5,7 +5,17 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"gitlab.com/rackn/provision/v4/models"
 )
+
+// newDocData returns models.DocData for composite literals on types that embed
+// DocData. Promoted DescData / Documentation fields are not valid keys in those literals.
+func newDocData(description, documentation string) models.DocData {
+	return models.DocData{
+		DescData:      models.DescData{Description: description},
+		Documentation: documentation,
+	}
+}
 
 func priorObjString(o types.Object, key string) types.String {
 	if o.IsNull() {
