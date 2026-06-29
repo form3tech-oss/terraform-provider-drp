@@ -1,7 +1,8 @@
 name: Test
 on:
   push:
-    - '!v*'
+    tags-ignore:
+      - 'v*'
   pull_request:
 jobs:
   setup-drp:
